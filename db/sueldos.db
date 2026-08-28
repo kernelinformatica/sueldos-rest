@@ -1,0 +1,888 @@
+-- --------------------------------------------------------
+-- Host:                         10.0.0.33
+-- Versión del servidor:         5.7.33-0ubuntu0.16.04.1 - (Ubuntu)
+-- SO del servidor:              Linux
+-- HeidiSQL Versión:             12.11.0.7065
+-- --------------------------------------------------------
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+
+-- Volcando estructura de base de datos para sueldos
+CREATE DATABASE IF NOT EXISTS `sueldos` /*!40100 DEFAULT CHARACTER SET utf8 COLLATE utf8_spanish_ci */;
+USE `sueldos`;
+
+-- Volcando estructura para tabla sueldos.bancos
+CREATE TABLE IF NOT EXISTS `bancos` (
+  `banco_id` int(11) NOT NULL AUTO_INCREMENT,
+  `codigo` int(11) NOT NULL,
+  `nombre` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `cuenta` varchar(15) COLLATE utf8_spanish_ci NOT NULL DEFAULT '0',
+  `empresa_id` int(11) NOT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`banco_id`),
+  KEY `idx_bancos_estado` (`estado_id`),
+  KEY `banco_id` (`banco_id`),
+  KEY `FK_bancos_empresas` (`empresa_id`),
+  CONSTRAINT `FK_bancos_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_bancos_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=76 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.cargos
+CREATE TABLE IF NOT EXISTS `cargos` (
+  `cargo_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `seccion_id` int(11) NOT NULL,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `abreviatura` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `responsable` varchar(150) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `descripcion` varchar(250) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`cargo_id`),
+  KEY `cargo_id` (`cargo_id`),
+  KEY `FK_cargos_empresas` (`empresa_id`),
+  KEY `FK_cargos_secciones` (`seccion_id`),
+  KEY `FK_cargos_estados` (`estado_id`),
+  CONSTRAINT `FK_cargos_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_cargos_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`),
+  CONSTRAINT `FK_cargos_secciones` FOREIGN KEY (`seccion_id`) REFERENCES `secciones` (`seccion_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.conceptos
+CREATE TABLE IF NOT EXISTS `conceptos` (
+  `concepto_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `grupo_id` int(11) NOT NULL,
+  `tipo_concepto_id` int(11) NOT NULL,
+  `codigo` varchar(20) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci NOT NULL,
+  `importe_fijo` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `multiplicador` decimal(12,2) DEFAULT '0.00',
+  `divisor` decimal(12,2) DEFAULT '0.00',
+  `suma_resta` enum('S','R') COLLATE utf8_spanish_ci NOT NULL,
+  `afecta_sac` tinyint(1) DEFAULT '0',
+  `detalle` text COLLATE utf8_spanish_ci,
+  PRIMARY KEY (`concepto_id`),
+  KEY `idx_concepto_empresa` (`empresa_id`),
+  KEY `FK_conceptos_grupos_conceptos_master` (`grupo_id`),
+  KEY `concepto_id` (`concepto_id`),
+  KEY `FK_conceptos_conceptos_tipos` (`tipo_concepto_id`),
+  CONSTRAINT `FK_conceptos_conceptos_tipos` FOREIGN KEY (`tipo_concepto_id`) REFERENCES `conceptos_tipos` (`conceptos_tipos_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_conceptos_grupos_conceptos_master` FOREIGN KEY (`grupo_id`) REFERENCES `grupos_conceptos_master` (`grupo_id`),
+  CONSTRAINT `conceptos_ibfk_1` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.conceptos_tipos
+CREATE TABLE IF NOT EXISTS `conceptos_tipos` (
+  `conceptos_tipos_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '1',
+  `codigo` varchar(20) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `prioridad` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`conceptos_tipos_id`) USING BTREE,
+  UNIQUE KEY `codigo` (`codigo`),
+  KEY `conceptos_tipos_id` (`conceptos_tipos_id`),
+  KEY `FK_conceptos_tipos_empresas` (`empresa_id`),
+  CONSTRAINT `FK_conceptos_tipos_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.contrataciones_tipos
+CREATE TABLE IF NOT EXISTS `contrataciones_tipos` (
+  `contrataciones_tipos_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `descripcion` varchar(250) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado` varchar(250) COLLATE utf8_spanish_ci NOT NULL DEFAULT '1',
+  PRIMARY KEY (`contrataciones_tipos_id`),
+  KEY `contrataciones_tipos_id` (`contrataciones_tipos_id`),
+  KEY `FK_contrataciones_tipos_empresas` (`empresa_id`),
+  CONSTRAINT `FK_contrataciones_tipos_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.convenios
+CREATE TABLE IF NOT EXISTS `convenios` (
+  `convenio_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `codigo` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`convenio_id`),
+  UNIQUE KEY `uk_convenio_empresa_codigo` (`empresa_id`,`codigo`),
+  KEY `idx_convenios_empresa` (`empresa_id`),
+  KEY `idx_convenios_estado` (`estado_id`),
+  CONSTRAINT `fk_convenios_empresa` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`),
+  CONSTRAINT `fk_convenios_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.convenios_categorias
+CREATE TABLE IF NOT EXISTS `convenios_categorias` (
+  `categoria_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '1',
+  `convenio_id` int(11) NOT NULL,
+  `codigo` varchar(30) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `sueldo_basico` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `valor_hora` decimal(12,2) DEFAULT NULL,
+  `valor_dia` decimal(12,2) DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`categoria_id`),
+  UNIQUE KEY `uk_categoria_convenio_codigo` (`convenio_id`,`codigo`),
+  KEY `idx_categorias_convenio` (`convenio_id`),
+  KEY `idx_categorias_estado` (`estado_id`),
+  KEY `FK_convenios_categorias_empresas` (`empresa_id`),
+  CONSTRAINT `FK_convenios_categorias_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_categorias_convenio` FOREIGN KEY (`convenio_id`) REFERENCES `convenios` (`convenio_id`),
+  CONSTRAINT `fk_categorias_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados
+CREATE TABLE IF NOT EXISTS `empleados` (
+  `empleado_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `sucursal_id` int(11) DEFAULT NULL,
+  `seccion_id` int(11) DEFAULT NULL,
+  `cargo_id` int(11) DEFAULT NULL,
+  `legajo` varchar(20) COLLATE utf8_spanish_ci NOT NULL,
+  `tipo_documento` enum('DNI','CUIT','CUIL','PASAPORTE') COLLATE utf8_spanish_ci NOT NULL,
+  `numero_documento` varchar(20) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `apellido` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `fecha_nacimiento` date DEFAULT NULL,
+  `sexo` enum('M','F','X') COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_civil` enum('SOLTERO','CASADO','DIVORCIADO','VIUDO') COLLATE utf8_spanish_ci DEFAULT NULL,
+  `nacionalidad` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `direccion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `localidad` varchar(100) COLLATE utf8_spanish_ci DEFAULT '0',
+  `telefono` varchar(30) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `email` varchar(100) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `fecha_ingreso` date DEFAULT NULL,
+  `fecha_egreso` date DEFAULT NULL,
+  `tipo_contratacion_id` int(11) DEFAULT NULL,
+  `convenio_categoria_id` int(11) DEFAULT NULL,
+  `dias_trabajados` decimal(3,0) DEFAULT NULL,
+  `forma_pago_id` int(11) NOT NULL,
+  `foto` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `habilitado` int(11) NOT NULL DEFAULT '1' COMMENT '1 = se le puede liquidar, 0 = no se le puede liquidar',
+  `estado` int(11) NOT NULL,
+  PRIMARY KEY (`empleado_id`),
+  UNIQUE KEY `legajo` (`legajo`),
+  KEY `sucursal_id` (`sucursal_id`),
+  KEY `seccion_id` (`seccion_id`),
+  KEY `cargo_id` (`cargo_id`),
+  KEY `idx_empleado_legajo` (`legajo`),
+  KEY `idx_empleado_empresa` (`empresa_id`),
+  KEY `FK_empleados_estados_empleados` (`estado`),
+  KEY `FK_empleados_formas_pago` (`forma_pago_id`),
+  KEY `FK_empleados_contrataciones_tipos` (`tipo_contratacion_id`) USING BTREE,
+  KEY `convenio_categoria_id` (`convenio_categoria_id`),
+  CONSTRAINT `FK_empleados_contrataciones_tipos` FOREIGN KEY (`tipo_contratacion_id`) REFERENCES `contrataciones_tipos` (`contrataciones_tipos_id`),
+  CONSTRAINT `FK_empleados_convenios_categorias` FOREIGN KEY (`convenio_categoria_id`) REFERENCES `convenios_categorias` (`categoria_id`),
+  CONSTRAINT `FK_empleados_estados_empleados` FOREIGN KEY (`estado`) REFERENCES `estados_empleados` (`estado_id`),
+  CONSTRAINT `FK_empleados_formas_pago` FOREIGN KEY (`forma_pago_id`) REFERENCES `formas_pago` (`forma_pago_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `empleados_ibfk_1` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`),
+  CONSTRAINT `empleados_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`sucursal_id`),
+  CONSTRAINT `empleados_ibfk_3` FOREIGN KEY (`seccion_id`) REFERENCES `secciones` (`seccion_id`),
+  CONSTRAINT `empleados_ibfk_4` FOREIGN KEY (`cargo_id`) REFERENCES `cargos` (`cargo_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_archivos
+CREATE TABLE IF NOT EXISTS `empleados_archivos` (
+  `archivo_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '0',
+  `empleado_id` int(11) NOT NULL,
+  `tipo` varchar(30) NOT NULL,
+  `alias` varchar(120) DEFAULT NULL,
+  `nombre_archivo` varchar(255) NOT NULL,
+  `ruta_archivo` varchar(500) NOT NULL,
+  `ruta_publica` varchar(500) DEFAULT NULL,
+  `url_publica` varchar(500) DEFAULT NULL,
+  `mime_type` varchar(100) DEFAULT NULL,
+  `extension` varchar(20) DEFAULT NULL,
+  `tamano_bytes` bigint(20) DEFAULT NULL,
+  `es_principal` tinyint(1) NOT NULL DEFAULT '0',
+  `descripcion` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`archivo_id`),
+  KEY `idx_empleados_archivos_empleado` (`empleado_id`),
+  KEY `idx_empleados_archivos_tipo` (`tipo`),
+  KEY `idx_empleados_archivos_principal` (`empleado_id`,`tipo`,`es_principal`),
+  KEY `FK_empleados_archivos_empresas` (`empresa_id`),
+  CONSTRAINT `FK_empleados_archivos_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_empleados_archivos_empleado` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_asistencia
+CREATE TABLE IF NOT EXISTS `empleados_asistencia` (
+  `asistencia_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '0',
+  `empleado_id` int(11) NOT NULL,
+  `fecha` date NOT NULL,
+  `tipo` enum('NORMAL','AUSENCIA','FERIADO','VACACIONES','LICENCIA','ENFERMEDAD','SUSPENSION','FRANCO') COLLATE utf8_spanish_ci NOT NULL DEFAULT 'NORMAL',
+  `horas_trabajadas` decimal(6,2) DEFAULT '0.00',
+  `horas_extras_50` decimal(6,2) DEFAULT '0.00',
+  `horas_extras_100` decimal(6,2) DEFAULT '0.00',
+  `observaciones` varchar(500) COLLATE utf8_spanish_ci DEFAULT NULL,
+  PRIMARY KEY (`asistencia_id`),
+  UNIQUE KEY `uk_asistencia_empleado_fecha` (`empleado_id`,`fecha`),
+  KEY `idx_asistencia_empleado` (`empleado_id`),
+  KEY `idx_asistencia_fecha` (`fecha`),
+  KEY `asistencia_id` (`asistencia_id`),
+  KEY `FK_empleados_asistencia_empresas` (`empresa_id`),
+  CONSTRAINT `FK_empleados_asistencia_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_asistencia_empleado` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_conceptos
+CREATE TABLE IF NOT EXISTS `empleados_conceptos` (
+  `empleado_concepto_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empleado_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  `fecha_asignacion` date NOT NULL,
+  `unidades` decimal(10,2) DEFAULT NULL,
+  `importe` decimal(12,2) DEFAULT NULL,
+  `nro_liquidacion` int(11) DEFAULT NULL,
+  `orden` int(11) DEFAULT NULL,
+  `operador_codigo` varchar(20) COLLATE utf8_spanish_ci DEFAULT '1',
+  `operador_control` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`empleado_concepto_id`),
+  KEY `empleado_id` (`empleado_id`),
+  KEY `concepto_id` (`concepto_id`),
+  KEY `empleado_concepto_id` (`empleado_concepto_id`),
+  CONSTRAINT `empleados_conceptos_ibfk_1` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`),
+  CONSTRAINT `empleados_conceptos_ibfk_2` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_cuentas_bancarias
+CREATE TABLE IF NOT EXISTS `empleados_cuentas_bancarias` (
+  `cuenta_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '0',
+  `empleado_id` int(11) NOT NULL,
+  `banco_id` int(11) NOT NULL,
+  `tipo_cuenta_id` int(11) DEFAULT NULL,
+  `numero_cuenta` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `cbu` varchar(22) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `alias_cbu` varchar(100) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `titular` varchar(150) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `fecha_desde` date NOT NULL,
+  `fecha_hasta` date DEFAULT NULL,
+  `principal` tinyint(1) NOT NULL DEFAULT '1',
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`cuenta_id`),
+  KEY `cuenta_id` (`cuenta_id`),
+  KEY `FK_empleados_cuentas_bancarias_empresas` (`empresa_id`),
+  KEY `FK_empleados_cuentas_bancarias_empleados` (`empleado_id`),
+  KEY `FK_empleados_cuentas_bancarias_bancos` (`banco_id`),
+  KEY `FK_empleados_cuentas_bancarias_empleados_cuentas_bancarias_tipos` (`tipo_cuenta_id`),
+  CONSTRAINT `FK_empleados_cuentas_bancarias_bancos` FOREIGN KEY (`banco_id`) REFERENCES `bancos` (`banco_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_empleados_cuentas_bancarias_empleados` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_empleados_cuentas_bancarias_empleados_cuentas_bancarias_tipos` FOREIGN KEY (`tipo_cuenta_id`) REFERENCES `empleados_cuentas_bancarias_tipos` (`tipo_cuenta_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_empleados_cuentas_bancarias_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_cuentas_bancarias_tipos
+CREATE TABLE IF NOT EXISTS `empleados_cuentas_bancarias_tipos` (
+  `tipo_cuenta_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '0',
+  `codigo` varchar(20) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`tipo_cuenta_id`),
+  UNIQUE KEY `uk_tipo_cuenta_codigo` (`codigo`),
+  KEY `FK_empleados_tipos_cuentas_bancarias_empresas` (`empresa_id`),
+  KEY `tipo_cuenta_id` (`tipo_cuenta_id`),
+  KEY `FK_empleados_tipos_cuentas_bancarias_estados` (`estado_id`),
+  CONSTRAINT `FK_empleados_tipos_cuentas_bancarias_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_empleados_tipos_cuentas_bancarias_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empleados_historial
+CREATE TABLE IF NOT EXISTS `empleados_historial` (
+  `historial_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empleado_id` int(11) NOT NULL,
+  `convenio_id` int(11) DEFAULT NULL,
+  `categoria_id` int(11) DEFAULT NULL,
+  `sucursal_id` int(11) DEFAULT NULL,
+  `seccion_id` int(11) DEFAULT NULL,
+  `cargo_id` int(11) DEFAULT NULL,
+  `tipo_contratacion_id` int(11) DEFAULT NULL,
+  `fecha_desde` date NOT NULL,
+  `fecha_hasta` date DEFAULT NULL,
+  `observaciones` varchar(500) COLLATE utf8_spanish_ci DEFAULT NULL,
+  PRIMARY KEY (`historial_id`),
+  KEY `idx_historial_empleado` (`empleado_id`),
+  KEY `idx_historial_convenio` (`convenio_id`),
+  KEY `idx_historial_categoria` (`categoria_id`),
+  KEY `idx_historial_sucursal` (`sucursal_id`),
+  KEY `idx_historial_seccion` (`seccion_id`),
+  KEY `idx_historial_cargo` (`cargo_id`),
+  KEY `idx_historial_contratacion` (`tipo_contratacion_id`),
+  CONSTRAINT `fk_historial_cargo` FOREIGN KEY (`cargo_id`) REFERENCES `cargos` (`cargo_id`),
+  CONSTRAINT `fk_historial_categoria` FOREIGN KEY (`categoria_id`) REFERENCES `convenios_categorias` (`categoria_id`),
+  CONSTRAINT `fk_historial_contratacion` FOREIGN KEY (`tipo_contratacion_id`) REFERENCES `contrataciones_tipos` (`contrataciones_tipos_id`),
+  CONSTRAINT `fk_historial_convenio` FOREIGN KEY (`convenio_id`) REFERENCES `convenios` (`convenio_id`),
+  CONSTRAINT `fk_historial_empleado` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`),
+  CONSTRAINT `fk_historial_seccion` FOREIGN KEY (`seccion_id`) REFERENCES `secciones` (`seccion_id`),
+  CONSTRAINT `fk_historial_sucursal` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`sucursal_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.empresas
+CREATE TABLE IF NOT EXISTS `empresas` (
+  `empresa_id` int(11) NOT NULL AUTO_INCREMENT,
+  `codigo` varchar(30) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre_fantasia` varchar(150) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `cuit` varchar(20) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `condicion_iva_id` int(11) DEFAULT NULL,
+  `tipo_sociedad_id` int(11) DEFAULT NULL,
+  `inicio_actividades` date DEFAULT NULL,
+  `ingresos_brutos` varchar(30) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `direccion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `localidad` varchar(100) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `provincia_id` int(11) DEFAULT NULL,
+  `codigo_postal` varchar(20) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `pais_id` int(11) DEFAULT NULL,
+  `telefono` varchar(30) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `celular` varchar(30) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `email` varchar(100) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `web` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `logo` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `leyenda_recibo` varchar(500) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `forma_pago_id` int(11) NOT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`empresa_id`),
+  KEY `FK_empresas_estados` (`estado_id`),
+  KEY `FK_empresas_paises` (`pais_id`),
+  KEY `FK_empresas_provincias` (`provincia_id`),
+  KEY `FK_empresas_formas_pago` (`forma_pago_id`),
+  CONSTRAINT `FK_empresas_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_empresas_formas_pago` FOREIGN KEY (`forma_pago_id`) REFERENCES `formas_pago` (`forma_pago_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_empresas_paises` FOREIGN KEY (`pais_id`) REFERENCES `paises` (`pais_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_empresas_provincias` FOREIGN KEY (`provincia_id`) REFERENCES `provincias` (`provincia_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.estados
+CREATE TABLE IF NOT EXISTS `estados` (
+  `estado_id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `es_activo` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`estado_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.estados_empleados
+CREATE TABLE IF NOT EXISTS `estados_empleados` (
+  `estado_id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `es_activo` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`estado_id`) USING BTREE,
+  KEY `id_estado` (`estado_id`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.estados_liquidaciones
+CREATE TABLE IF NOT EXISTS `estados_liquidaciones` (
+  `estado_liquidacion_id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `es_activo` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`estado_liquidacion_id`) USING BTREE,
+  KEY `id_estado` (`estado_liquidacion_id`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.formas_pago
+CREATE TABLE IF NOT EXISTS `formas_pago` (
+  `forma_pago_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) DEFAULT '0',
+  `nombre` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `requiere_banco` int(11) NOT NULL DEFAULT '0',
+  `requiere_cbu` int(11) NOT NULL DEFAULT '0',
+  `requiere_cuenta` int(11) NOT NULL DEFAULT '0',
+  `descripcion` varchar(250) COLLATE utf8_spanish_ci NOT NULL,
+  `estado` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`forma_pago_id`),
+  KEY `forma_pago_id` (`forma_pago_id`),
+  KEY `FK_formas_pago_estados` (`estado`),
+  KEY `FK_formas_pago_empresas` (`empresa_id`),
+  CONSTRAINT `FK_formas_pago_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_formas_pago_estados` FOREIGN KEY (`estado`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.grupos_conceptos_detalle
+CREATE TABLE IF NOT EXISTS `grupos_conceptos_detalle` (
+  `grupo_detalle_id` int(11) NOT NULL AUTO_INCREMENT,
+  `grupo_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  PRIMARY KEY (`grupo_detalle_id`),
+  KEY `grupo_id` (`grupo_id`),
+  KEY `concepto_id` (`concepto_id`),
+  CONSTRAINT `grupos_conceptos_detalle_ibfk_1` FOREIGN KEY (`grupo_id`) REFERENCES `grupos_conceptos_master` (`grupo_id`),
+  CONSTRAINT `grupos_conceptos_detalle_ibfk_2` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.grupos_conceptos_master
+CREATE TABLE IF NOT EXISTS `grupos_conceptos_master` (
+  `grupo_id` int(11) NOT NULL AUTO_INCREMENT,
+  `codigo` int(11) NOT NULL DEFAULT '0',
+  `alias` varchar(50) COLLATE utf8_spanish_ci NOT NULL DEFAULT '0',
+  `empresa_id` int(11) NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `comentario` text COLLATE utf8_spanish_ci,
+  PRIMARY KEY (`grupo_id`),
+  KEY `idx_grupo_empresa` (`empresa_id`),
+  KEY `grupo_id` (`grupo_id`),
+  CONSTRAINT `grupos_conceptos_master_ibfk_1` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.liquidaciones
+CREATE TABLE IF NOT EXISTS `liquidaciones` (
+  `liquidacion_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empleado_id` int(11) NOT NULL,
+  `empresa_id` int(11) NOT NULL,
+  `periodo` date NOT NULL,
+  `fecha_liquidacion` date NOT NULL,
+  `total` decimal(12,2) DEFAULT '0.00',
+  `forma_pago_id` int(11) DEFAULT NULL,
+  `cbu_pago` varchar(22) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `banco_pago_id` int(11) DEFAULT NULL,
+  `estado` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`liquidacion_id`),
+  KEY `empresa_id` (`empresa_id`),
+  KEY `idx_liquidacion_empleado` (`empleado_id`),
+  KEY `FK_liquidaciones_estados_liquidaciones` (`estado`),
+  KEY `FK_liquidaciones_formas_pago` (`forma_pago_id`),
+  KEY `FK_liquidaciones_bancos` (`banco_pago_id`) USING BTREE,
+  CONSTRAINT `FK_liquidaciones_bancos` FOREIGN KEY (`banco_pago_id`) REFERENCES `bancos` (`banco_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_liquidaciones_estados_liquidaciones` FOREIGN KEY (`estado`) REFERENCES `estados_liquidaciones` (`estado_liquidacion_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_liquidaciones_formas_pago` FOREIGN KEY (`forma_pago_id`) REFERENCES `formas_pago` (`forma_pago_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `liquidaciones_ibfk_1` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`),
+  CONSTRAINT `liquidaciones_ibfk_2` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.liquidaciones_conceptos
+CREATE TABLE IF NOT EXISTS `liquidaciones_conceptos` (
+  `concepto_liquidacion_id` int(11) NOT NULL AUTO_INCREMENT,
+  `liquidacion_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  `unidades` decimal(12,2) DEFAULT NULL,
+  `valor_unitario` decimal(12,2) DEFAULT NULL,
+  `porcentaje` decimal(8,4) DEFAULT NULL,
+  `suma_resta` enum('S','R') COLLATE utf8_spanish_ci DEFAULT NULL,
+  `descripcion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `importe` decimal(12,2) NOT NULL,
+  PRIMARY KEY (`concepto_liquidacion_id`),
+  KEY `liquidacion_id` (`liquidacion_id`),
+  KEY `concepto_id` (`concepto_id`),
+  CONSTRAINT `liquidaciones_conceptos_ibfk_1` FOREIGN KEY (`liquidacion_id`) REFERENCES `liquidaciones` (`liquidacion_id`),
+  CONSTRAINT `liquidaciones_conceptos_ibfk_2` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.liquidaciones_detalle
+CREATE TABLE IF NOT EXISTS `liquidaciones_detalle` (
+  `liquidacion_detalle_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '0',
+  `liquidacion_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  `codigo_concepto` varchar(20) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `nombre_concepto` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `cantidad` decimal(12,4) NOT NULL DEFAULT '1.0000',
+  `base_calculo` decimal(14,2) DEFAULT NULL,
+  `porcentaje` decimal(8,4) DEFAULT NULL,
+  `importe` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  PRIMARY KEY (`liquidacion_detalle_id`),
+  KEY `idx_ld_liquidacion` (`liquidacion_id`),
+  KEY `idx_ld_concepto` (`concepto_id`),
+  KEY `FK_liquidaciones_detalle_empresas` (`empresa_id`),
+  CONSTRAINT `FK_liquidaciones_detalle_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_ld_concepto` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_ld_liquidacion` FOREIGN KEY (`liquidacion_id`) REFERENCES `liquidaciones` (`liquidacion_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.liquidacion_tipo
+CREATE TABLE IF NOT EXISTS `liquidacion_tipo` (
+  `liquidacion_tipo_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `nombre` varchar(50) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `descripcion` varchar(250) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) NOT NULL,
+  PRIMARY KEY (`liquidacion_tipo_id`) USING BTREE,
+  KEY `FK_liquidacion_tipo_estados` (`estado_id`),
+  KEY `id_liquidacion_tipo` (`liquidacion_tipo_id`) USING BTREE,
+  KEY `FK__empresas` (`empresa_id`) USING BTREE,
+  CONSTRAINT `FK__empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_liquidacion_tipo_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.localidad
+CREATE TABLE IF NOT EXISTS `localidad` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(255) COLLATE utf8_spanish_ci NOT NULL,
+  `codigoPostal` varchar(255) COLLATE utf8_spanish_ci NOT NULL,
+  `codigoProvincia` varchar(5) COLLATE utf8_spanish_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=21698 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.lsd_seg_social_conceptos
+CREATE TABLE IF NOT EXISTS `lsd_seg_social_conceptos` (
+  `concepto_seg_social_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  `subsistema_id` int(11) NOT NULL,
+  `afecta_base` tinyint(1) NOT NULL DEFAULT '0',
+  `es_aporte` tinyint(1) NOT NULL DEFAULT '0',
+  `es_contribucion` tinyint(1) NOT NULL DEFAULT '0',
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`concepto_seg_social_id`),
+  UNIQUE KEY `uk_lsd_seg_social_concepto` (`concepto_id`,`subsistema_id`),
+  KEY `idx_lsd_seg_social_concepto` (`concepto_id`),
+  KEY `idx_lsd_seg_social_subsistema` (`subsistema_id`),
+  KEY `idx_lsd_seg_social_estado` (`estado_id`),
+  KEY `idx_lsd_seg_social_empresa` (`empresa_id`),
+  CONSTRAINT `fk_lsd_seg_social_concepto` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_lsd_seg_social_empresa` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_lsd_seg_social_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_lsd_seg_social_subsistema` FOREIGN KEY (`subsistema_id`) REFERENCES `lsd_seg_social_subsistemas` (`subsistema_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.lsd_seg_social_subsistemas
+CREATE TABLE IF NOT EXISTS `lsd_seg_social_subsistemas` (
+  `subsistema_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `codigo` varchar(30) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`subsistema_id`),
+  UNIQUE KEY `uk_lsd_seg_social_subsistema_codigo` (`codigo`),
+  KEY `idx_lsd_seg_social_subsistema_estado` (`estado_id`),
+  KEY `FK_lsd_seg_social_subsistemas_empresas` (`empresa_id`),
+  CONSTRAINT `FK_lsd_seg_social_subsistemas_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_lsd_seg_social_subsistema_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.lsd_seg_social_vigencias
+CREATE TABLE IF NOT EXISTS `lsd_seg_social_vigencias` (
+  `vigencia_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `subsistema_id` int(11) NOT NULL,
+  `fecha_desde` date NOT NULL,
+  `fecha_hasta` date DEFAULT NULL,
+  `porcentaje_aporte` decimal(8,4) DEFAULT NULL,
+  `porcentaje_contribucion` decimal(8,4) DEFAULT NULL,
+  `importe_fijo_aporte` decimal(14,2) DEFAULT NULL,
+  `importe_fijo_contribucion` decimal(14,2) DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`vigencia_id`),
+  KEY `idx_lsd_seg_social_vigencia_subsistema` (`subsistema_id`),
+  KEY `idx_lsd_seg_social_vigencia_fechas` (`fecha_desde`,`fecha_hasta`),
+  KEY `idx_lsd_seg_social_vigencia_estado` (`estado_id`),
+  KEY `FK_lsd_seg_social_vigencias_empresas` (`empresa_id`),
+  CONSTRAINT `FK_lsd_seg_social_vigencias_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_lsd_seg_social_vigencia_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_lsd_seg_social_vigencia_subsistema` FOREIGN KEY (`subsistema_id`) REFERENCES `lsd_seg_social_subsistemas` (`subsistema_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.novedades
+CREATE TABLE IF NOT EXISTS `novedades` (
+  `novedad_id` int(11) NOT NULL AUTO_INCREMENT,
+  `periodo_id` int(11) NOT NULL,
+  `empleado_id` int(11) NOT NULL,
+  `concepto_id` int(11) NOT NULL,
+  `fecha` date DEFAULT NULL,
+  `cantidad` decimal(12,2) DEFAULT NULL,
+  `importe` decimal(12,2) DEFAULT NULL,
+  `porcentaje` decimal(8,4) DEFAULT NULL,
+  `observaciones` varchar(500) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  `operador_codigo` varchar(20) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `fecha_carga` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`novedad_id`),
+  KEY `idx_novedades_periodo` (`periodo_id`),
+  KEY `idx_novedades_empleado` (`empleado_id`),
+  KEY `idx_novedades_concepto` (`concepto_id`),
+  KEY `idx_novedades_estado` (`estado_id`),
+  CONSTRAINT `fk_novedades_concepto` FOREIGN KEY (`concepto_id`) REFERENCES `conceptos` (`concepto_id`),
+  CONSTRAINT `fk_novedades_empleado` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`empleado_id`),
+  CONSTRAINT `fk_novedades_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`),
+  CONSTRAINT `fk_novedades_periodo` FOREIGN KEY (`periodo_id`) REFERENCES `periodos_liquidacion` (`periodo_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.paises
+CREATE TABLE IF NOT EXISTS `paises` (
+  `pais_id` int(11) NOT NULL AUTO_INCREMENT,
+  `codigo` varchar(3) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`pais_id`),
+  UNIQUE KEY `uk_paises_codigo` (`codigo`),
+  UNIQUE KEY `uk_paises_nombre` (`nombre`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.parametros_liquidacion
+CREATE TABLE IF NOT EXISTS `parametros_liquidacion` (
+  `parametro_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `codigo` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` varchar(255) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `tipo_dato` enum('NUMERO','PORCENTAJE','TEXTO','FECHA','BOOLEANO') COLLATE utf8_spanish_ci NOT NULL DEFAULT 'NUMERO',
+  `valor` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `fecha_desde` date NOT NULL,
+  `fecha_hasta` date DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`parametro_id`),
+  KEY `idx_parametros_empresa` (`empresa_id`),
+  KEY `idx_parametros_codigo` (`codigo`),
+  KEY `idx_parametros_vigencia` (`fecha_desde`,`fecha_hasta`),
+  KEY `fk_parametros_estado` (`estado_id`),
+  CONSTRAINT `fk_parametros_empresa` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`),
+  CONSTRAINT `fk_parametros_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.periodos_liquidacion
+CREATE TABLE IF NOT EXISTS `periodos_liquidacion` (
+  `periodo_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `anio` int(4) NOT NULL,
+  `mes` int(2) NOT NULL,
+  `fecha_desde` date NOT NULL,
+  `fecha_hasta` date NOT NULL,
+  `descripcion` varchar(100) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`periodo_id`),
+  UNIQUE KEY `uk_periodo_empresa_anio_mes` (`empresa_id`,`anio`,`mes`),
+  KEY `idx_periodos_empresa` (`empresa_id`),
+  KEY `idx_periodos_estado` (`estado_id`),
+  CONSTRAINT `fk_periodos_empresa` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`),
+  CONSTRAINT `fk_periodos_estado` FOREIGN KEY (`estado_id`) REFERENCES `estados_liquidaciones` (`estado_liquidacion_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.permiso
+CREATE TABLE IF NOT EXISTS `permiso` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) DEFAULT NULL,
+  `nombre` varchar(255) NOT NULL,
+  `descripcion` text,
+  `alias` varchar(150) DEFAULT NULL,
+  `modulo` enum('admin','public') NOT NULL,
+  `grupo` varchar(50) NOT NULL DEFAULT '',
+  `icono` varchar(50) DEFAULT '',
+  `router` varchar(150) DEFAULT '',
+  `orden` int(11) NOT NULL DEFAULT '1',
+  `esMenu` tinyint(1) NOT NULL DEFAULT '0',
+  `estado` int(11) NOT NULL DEFAULT '1' COMMENT '0 no activo, 1 activo',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `nombre` (`nombre`),
+  KEY `appId` (`empresa_id`) USING BTREE,
+  CONSTRAINT `FK_permiso_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.provincias
+CREATE TABLE IF NOT EXISTS `provincias` (
+  `provincia_id` int(11) NOT NULL AUTO_INCREMENT,
+  `pais_id` int(11) NOT NULL,
+  `codigo` varchar(10) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`provincia_id`),
+  UNIQUE KEY `uk_provincias_pais_codigo` (`pais_id`,`codigo`),
+  UNIQUE KEY `uk_provincias_pais_nombre` (`pais_id`,`nombre`),
+  KEY `idx_provincias_pais` (`pais_id`),
+  CONSTRAINT `fk_provincias_pais` FOREIGN KEY (`pais_id`) REFERENCES `paises` (`pais_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.rol
+CREATE TABLE IF NOT EXISTS `rol` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '1',
+  `alias` varchar(50) COLLATE utf8_spanish_ci NOT NULL DEFAULT '0',
+  `nivel` int(11) NOT NULL DEFAULT '0',
+  `nombre` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `descripcion` text COLLATE utf8_spanish_ci,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE KEY `id` (`id`) USING BTREE,
+  UNIQUE KEY `alias` (`alias`),
+  KEY `nivel` (`nivel`),
+  KEY `FK_rol_empresas` (`empresa_id`),
+  KEY `FK_rol_estados` (`estado_id`),
+  CONSTRAINT `FK_rol_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_rol_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.rolPermiso
+CREATE TABLE IF NOT EXISTS `rolPermiso` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL DEFAULT '1',
+  `rolId` int(11) NOT NULL,
+  `permisoId` int(11) NOT NULL,
+  `estado` int(1) NOT NULL DEFAULT '1',
+  `orden` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `rolPermisoUnique` (`rolId`,`permisoId`,`empresa_id`) USING BTREE,
+  KEY `rolPermiso_permiso_fk` (`permisoId`),
+  KEY `rolPermiso_app_fk` (`empresa_id`) USING BTREE,
+  CONSTRAINT `FK_rolPermiso_empresas` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`),
+  CONSTRAINT `rolPermiso_permiso_fk` FOREIGN KEY (`permisoId`) REFERENCES `permiso` (`id`),
+  CONSTRAINT `rolPermiso_rol_fk` FOREIGN KEY (`rolId`) REFERENCES `rol` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.secciones
+CREATE TABLE IF NOT EXISTS `secciones` (
+  `seccion_id` int(11) NOT NULL AUTO_INCREMENT,
+  `sucursal_id` int(11) NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `orden` int(11) NOT NULL DEFAULT '0',
+  `estado` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`seccion_id`),
+  KEY `sucursal_id` (`sucursal_id`),
+  KEY `FK_secciones_estados` (`estado`),
+  CONSTRAINT `FK_secciones_estados` FOREIGN KEY (`estado`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `secciones_ibfk_1` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`sucursal_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.sucursales
+CREATE TABLE IF NOT EXISTS `sucursales` (
+  `sucursal_id` int(11) NOT NULL AUTO_INCREMENT,
+  `cod_interno` int(11) NOT NULL DEFAULT '0',
+  `empresa_id` int(11) NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `direccion` varchar(200) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `principal` int(11) NOT NULL DEFAULT '0',
+  `estado` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`sucursal_id`),
+  KEY `empresa_id` (`empresa_id`),
+  KEY `sucursal_id` (`sucursal_id`),
+  KEY `FK_sucursales_estados` (`estado`),
+  CONSTRAINT `FK_sucursales_estados` FOREIGN KEY (`estado`) REFERENCES `estados` (`estado_id`),
+  CONSTRAINT `sucursales_ibfk_1` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`empresa_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+-- Volcando estructura para tabla sueldos.usuarios
+CREATE TABLE IF NOT EXISTS `usuarios` (
+  `usuario_id` int(11) NOT NULL AUTO_INCREMENT,
+  `empresa_id` int(11) NOT NULL,
+  `rol_id` int(11) NOT NULL,
+  `username` varchar(50) COLLATE utf8_spanish_ci NOT NULL,
+  `email` varchar(150) COLLATE utf8_spanish_ci NOT NULL,
+  `password_hash` varchar(255) COLLATE utf8_spanish_ci NOT NULL,
+  `nombre` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `apellido` varchar(100) COLLATE utf8_spanish_ci NOT NULL,
+  `ultimo_acceso` datetime DEFAULT NULL,
+  `ultimo_ip` varchar(45) COLLATE utf8_spanish_ci DEFAULT NULL,
+  `intentos_fallidos` int(11) NOT NULL DEFAULT '0',
+  `bloqueado_hasta` datetime DEFAULT NULL,
+  `password_fecha_cambio` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `estado_id` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`usuario_id`),
+  UNIQUE KEY `uk_usuarios_username` (`username`),
+  UNIQUE KEY `uk_usuarios_email` (`email`),
+  KEY `FK_usuarios_empleados` (`empresa_id`),
+  KEY `FK_usuarios_estados` (`estado_id`),
+  KEY `FK_usuarios_rol` (`rol_id`),
+  CONSTRAINT `FK_usuarios_empleados` FOREIGN KEY (`empresa_id`) REFERENCES `empleados` (`empresa_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_usuarios_estados` FOREIGN KEY (`estado_id`) REFERENCES `estados` (`estado_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_usuarios_rol` FOREIGN KEY (`rol_id`) REFERENCES `rol` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 COLLATE=utf8_spanish_ci;
+
+-- La exportación de datos fue deseleccionada.
+
+/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
