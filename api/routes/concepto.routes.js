@@ -224,54 +224,8 @@ router.get('/', async (req, res) => {
       return out;
     });
 
-    // Obtener topes aplicables para los conceptos listados (consulta única)
-    const conceptoIds = normalized.map(c => c.concepto_id).filter(Boolean);
-    const grupoIds = normalized.map(c => c.grupo && c.grupo.grupo_id ? c.grupo.grupo_id : null).filter(Boolean);
-
-    // construir WHERE dinámico para topes
-    const topesWhere = ['t.empresa_id = ?','t.activo = 1'];
-    const topesParams = [empresaId];
-    const orClauses = [];
-    if (conceptoIds.length) {
-      orClauses.push(`t.concepto_id IN (${conceptoIds.map(() => '?').join(',')})`);
-      topesParams.push(...conceptoIds);
-    }
-    if (grupoIds.length) {
-      orClauses.push(`t.grupo_id IN (${grupoIds.map(() => '?').join(',')})`);
-      topesParams.push(...grupoIds);
-    }
-    // globales (sin concepto ni grupo)
-    orClauses.push('(t.concepto_id IS NULL AND t.grupo_id IS NULL)');
-
-    const topesSql = `SELECT t.* FROM conceptos_topes t WHERE ${topesWhere.join(' AND ')} AND (${orClauses.join(' OR ')}) ORDER BY t.tope_id DESC`;
-    const [topesRows] = await pool.query(topesSql, topesParams);
-
-    // mapear topes por concepto/grupo y globales
-    const topesByConcepto = {};
-    const topesByGrupo = {};
-    const topesGlobal = [];
-    for (const t of topesRows) {
-      t.accion_label = accionLabels[t.accion] ?? t.accion;
-      t.tipo_label = tipoLabels[t.tipo] ?? t.tipo;
-      if (t.concepto_id) {
-        (topesByConcepto[t.concepto_id] = topesByConcepto[t.concepto_id] || []).push(t);
-      } else if (t.grupo_id) {
-        (topesByGrupo[t.grupo_id] = topesByGrupo[t.grupo_id] || []).push(t);
-      } else {
-        topesGlobal.push(t);
-      }
-    }
-
-    // agregar campo `topes` a cada concepto (prioridad: concepto -> grupo -> global)
-    const enriched = normalized.map(c => {
-      const byConcept = topesByConcepto[c.concepto_id] || [];
-      const byGrupo = (c.grupo && c.grupo.grupo_id) ? (topesByGrupo[c.grupo.grupo_id] || []) : [];
-      const combined = [...byConcept, ...byGrupo, ...topesGlobal];
-      return { ...c, topes: combined };
-    });
-
-    const meta = { total: total ?? enriched.length, page: page ?? 1, per_page: limit, returned: enriched.length };
-    const result = { data: enriched, meta };
+    const meta = { total: total ?? normalized.length, page: page ?? 1, per_page: limit, returned: normalized.length };
+    const result = { data: normalized, meta };
 
     // set cache TTL 60s
     try {

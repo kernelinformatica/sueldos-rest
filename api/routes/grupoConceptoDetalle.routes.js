@@ -16,6 +16,16 @@ async function hasPermission(alias, rolId, empresaId) {
   return rows[0].cnt > 0;
 }
 
+async function getRolAlias(rolId, empresaId) {
+  const [rows] = await pool.query('SELECT alias FROM rol WHERE id = ? AND empresa_id = ? LIMIT 1', [rolId, empresaId]);
+  return rows[0]?.alias ?? null;
+}
+
+function isSuperAdminAlias(alias) {
+  const normalizedAlias = String(alias ?? '').trim().toLowerCase();
+  return normalizedAlias === 'super_admin' || normalizedAlias === 'super_administrador' || normalizedAlias === 'super-administrador';
+}
+
 // Listar conceptos dentro de un grupo
 router.get('/grupo/:grupo_id', async (req, res) => {
   try {
@@ -51,6 +61,7 @@ router.post('/', async (req, res) => {
   try {
     const empresaId = req.user.empresa_id;
     const rolId = req.user.rol_id;
+    const rolAlias = await getRolAlias(rolId, empresaId);
     const ok = await hasPermission('grupos_editar', rolId, empresaId);
     if (!ok) return res.status(403).json({ error: 'Permiso requerido: grupos_editar' });
 
@@ -61,8 +72,11 @@ router.post('/', async (req, res) => {
     if (!Number.isInteger(conceptoId) || conceptoId <= 0) return res.status(400).json({ error: 'concepto_id inválido' });
 
     // validar grupo/empresa
-    const [gRows] = await pool.query('SELECT grupo_id FROM grupos_conceptos_master WHERE grupo_id = ? AND empresa_id = ? LIMIT 1', [grupoId, empresaId]);
+    const [gRows] = await pool.query('SELECT grupo_id, es_default_sistema FROM grupos_conceptos_master WHERE grupo_id = ? AND empresa_id = ? LIMIT 1', [grupoId, empresaId]);
     if (!gRows.length) return res.status(404).json({ error: 'Grupo no encontrado' });
+    if (Number(gRows[0].es_default_sistema) === 1 && !isSuperAdminAlias(rolAlias)) {
+      return res.status(403).json({ error: 'Grupo del sistema: solo super_admin puede modificar sus conceptos' });
+    }
 
     // validar concepto existe y pertenece a la empresa
     const [cRows] = await pool.query('SELECT concepto_id FROM conceptos WHERE concepto_id = ? AND empresa_id = ? LIMIT 1', [conceptoId, empresaId]);
@@ -85,6 +99,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const empresaId = req.user.empresa_id;
     const rolId = req.user.rol_id;
+    const rolAlias = await getRolAlias(rolId, empresaId);
     const ok = await hasPermission('grupos_editar', rolId, empresaId);
     if (!ok) return res.status(403).json({ error: 'Permiso requerido: grupos_editar' });
 
@@ -93,12 +108,15 @@ router.delete('/:id', async (req, res) => {
 
     // verificar que la relación existe y pertenece a un grupo de la empresa
     const [rows] = await pool.query(
-      `SELECT d.grupo_detalle_id FROM grupos_conceptos_detalle d
+      `SELECT d.grupo_detalle_id, g.es_default_sistema FROM grupos_conceptos_detalle d
        INNER JOIN grupos_conceptos_master g ON g.grupo_id = d.grupo_id
        WHERE d.grupo_detalle_id = ? AND g.empresa_id = ? LIMIT 1`,
       [id, empresaId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Asignación no encontrada' });
+    if (Number(rows[0].es_default_sistema) === 1 && !isSuperAdminAlias(rolAlias)) {
+      return res.status(403).json({ error: 'Grupo del sistema: solo super_admin puede modificar sus conceptos' });
+    }
 
     await pool.query('DELETE FROM grupos_conceptos_detalle WHERE grupo_detalle_id = ?', [id]);
     return res.json({ ok: true });
