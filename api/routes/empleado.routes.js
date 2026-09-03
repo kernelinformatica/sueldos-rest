@@ -78,6 +78,47 @@ const upload = multer({ storage });
 
 const router = Router();
 router.use(authenticateToken);
+router.get('/search', async (req, res) => {
+	try {
+		const empresaId = Number(req.user?.empresa_id);
+		if (!Number.isInteger(empresaId) || empresaId <= 0) {
+			return sendError(res, 401, 'empresa_id inválido en token', null);
+		}
+
+		const term = String(req.query.q ?? req.query.query ?? req.query.search ?? '').trim();
+		if (!term) {
+			return sendError(res, 400, 'q es obligatorio', null);
+		}
+
+		const like = `%${term}%`;
+		const params = [empresaId, like, like];
+		const [rows] = await pool.query(
+			`SELECT empleado_id, legajo, nombre, apellido, estado, foto
+			 FROM empleados
+			 WHERE empresa_id = ?
+			   AND (CAST(legajo AS CHAR) LIKE ? OR CONCAT(nombre, ' ', apellido) LIKE ?)
+			 ORDER BY apellido ASC, nombre ASC, legajo ASC
+			 LIMIT 50`,
+			params
+		);
+
+		return res.json({
+			data: rows.map((row) => ({
+				empleado_id: row.empleado_id,
+				legajo: row.legajo,
+				nombre: row.nombre,
+				apellido: row.apellido,
+				estado: row.estado,
+				foto: row.foto ?? null,
+				texto: `${row.apellido ?? ''}, ${row.nombre ?? ''}`.trim(),
+			})),
+			meta: { total: rows.length, query: term },
+		});
+	} catch (error) {
+		console.error('employee search error:', error);
+		return sendError(res, 500, 'Error al buscar empleados', error.message);
+	}
+});
 router.get('/', controller.list);
 router.get('/:id', controller.getById);
 

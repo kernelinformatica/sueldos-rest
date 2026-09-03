@@ -27,6 +27,7 @@ import convenioRouter from './routes/convenio.routes.js';
 import convenioCategoriaRouter from './routes/convenioCategoria.routes.js';
 import contratacionTipoRouter from './routes/contratacionTipo.routes.js';
 import formaPagoRouter from './routes/formaPago.routes.js';
+import localidadRouter from './routes/localidad.routes.js';
 import estadoRouter from './routes/estado.routes.js';
 import estadoEmpleadoRouter from './routes/estadoEmpleado.routes.js';
 import conceptoRouter from './routes/concepto.routes.js';
@@ -39,6 +40,8 @@ import novedadRouter from './routes/novedad.routes.js';
 import empleadoCuentaBancariaRouter from './routes/empleadoCuentaBancaria.routes.js';
 import empleadoAsistenciaRouter from './routes/empleadoAsistencia.routes.js';
 import conceptoTopeRouter from './routes/conceptoTope.routes.js';
+import dashboardRouter from './routes/dashboard.routes.js';
+import liquidacionTipoRouter from './routes/liquidacionTipo.routes.js';
 import { createEmployeeService } from './services/employee.service.js';
 
 
@@ -126,6 +129,7 @@ app.use('/api/convenios', convenioRouter);
 app.use('/api/convenios-categorias', convenioCategoriaRouter);
 app.use('/api/contrataciones-tipos', contratacionTipoRouter);
 app.use('/api/formas-pago', formaPagoRouter);
+app.use('/api/localidades', localidadRouter);
 app.use('/api/estados', estadoRouter);
 app.use('/api/estados-empleados', estadoEmpleadoRouter);
 app.use('/api/conceptos', conceptoRouter);
@@ -138,6 +142,8 @@ app.use('/api/novedades', novedadRouter);
 app.use('/api/empleados-cuentas-bancarias', empleadoCuentaBancariaRouter);
 app.use('/api/empleados-asistencia', empleadoAsistenciaRouter);
 app.use('/api/topes', conceptoTopeRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/liquidacion-tipos', liquidacionTipoRouter);
 
 const employeeService = createEmployeeService();
 app.get('/api/empleados-basico', authenticateToken, employeeService.list);

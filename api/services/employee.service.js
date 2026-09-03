@@ -78,6 +78,7 @@ function mapEmployeeRow(row) {
     fecha_ingreso: row.fecha_ingreso,
     fecha_egreso: row.fecha_egreso,
     tipo_contratacion_id: row.tipo_contratacion_id,
+    contratacion_tipo_id: row.tipo_contratacion_id,
     convenio_categoria_id: row.convenio_categoria_id,
     dias_trabajados: row.dias_trabajados,
     forma_pago_id: row.forma_pago_id,
@@ -107,10 +108,12 @@ function mapEmployeeRow(row) {
     } : null,
     contratacion_tipo: row.contratacion_tipo_id_ref ? {
       contrataciones_tipos_id: row.contratacion_tipo_id_ref,
+      contratacion_tipo_id: row.contratacion_tipo_id_ref,
       nombre: row.contratacion_nombre,
     } : null,
     convenio_categoria: row.categoria_id_ref ? {
       categoria_id: row.categoria_id_ref,
+      convenio_categoria_id: row.categoria_id_ref,
       nombre: row.categoria_nombre,
     } : null,
     convenio: row.convenio_id_ref ? {

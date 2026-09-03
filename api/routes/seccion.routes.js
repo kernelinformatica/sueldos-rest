@@ -48,6 +48,30 @@ async function estadoExists(estadoId) {
   return rows.length > 0;
 }
 
+async function attachSeccionSucursal(rows) {
+  if (!rows.length) return rows;
+
+  const sucursalIds = [...new Set(rows.map((row) => row.sucursal_id).filter((value) => value !== null && value !== undefined))];
+  if (!sucursalIds.length) {
+    return rows.map((row) => ({ ...row, sucursal: {} }));
+  }
+
+  const placeholders = sucursalIds.map(() => '?').join(',');
+  const [sucursales] = await pool.query(
+    `SELECT sucursal_id, cod_interno, empresa_id, nombre, direccion, localidad_id, latitud, longitud, resp_sucursal, principal, estado, orden
+     FROM sucursales
+     WHERE sucursal_id IN (${placeholders})`,
+    sucursalIds
+  );
+
+  const sucursalesById = new Map(sucursales.map((sucursal) => [String(sucursal.sucursal_id), sucursal]));
+
+  return rows.map((row) => ({
+    ...row,
+    sucursal: sucursalesById.get(String(row.sucursal_id)) || {},
+  }));
+}
+
 const router = Router();
 
 router.use(authenticateToken);
@@ -80,8 +104,8 @@ router.get('/all', async (req, res) => {
     sql += ' ORDER BY s.orden ASC, s.seccion_id ASC';
 
     const [rows] = await pool.query(sql, params);
-    // devolver solamente las filas filtradas por empresa (sin exposición de envelope)
-    return res.json(rows);
+    const data = await attachSeccionSucursal(rows);
+    return res.json(data);
   } catch (error) {
     console.error('secciones all error:', error);
     return res.status(500).json({ error: 'Error al listar todas las secciones' });
@@ -167,10 +191,41 @@ router.get('/by-sucursal', async (req, res) => {
       [empresaId, sucursalId]
     );
 
-    return res.json({ data: rows, meta: { total: rows.length } });
+    const data = await attachSeccionSucursal(rows);
+    return res.json({ data, meta: { total: data.length } });
   } catch (error) {
     console.error('secciones by-sucursal error:', error);
     return res.status(500).json({ error: 'Error al listar secciones por sucursal' });
+  }
+});
+
+// Secciones disponibles para relacionar a una sucursal: excluye las ya asignadas a esa sucursal
+router.get('/disponibles-para-sucursal', async (req, res) => {
+  try {
+    const empresaIdRaw = req.user && req.user.empresa_id;
+    const empresaId = parseInt(empresaIdRaw, 10);
+    if (!Number.isInteger(empresaId) || empresaId <= 0) return res.status(401).json({ error: 'empresa_id inválido en token' });
+
+    const sucursalIdRaw = req.query.sucursal_id;
+    if (!sucursalIdRaw) return res.status(400).json({ error: 'sucursal_id es obligatorio' });
+    const sucursalId = parseInt(sucursalIdRaw, 10);
+    if (!Number.isInteger(sucursalId) || sucursalId <= 0) return res.status(400).json({ error: 'sucursal_id inválido' });
+
+    const [rows] = await pool.query(
+      `SELECT s.seccion_id, s.sucursal_id, s.nombre, s.orden, s.estado AS estado_id,
+              su.empresa_id AS empresa_id_ref, su.nombre AS sucursal_nombre
+       FROM secciones s
+       INNER JOIN sucursales su ON su.sucursal_id = s.sucursal_id
+       WHERE su.empresa_id = ? AND (s.sucursal_id IS NULL OR s.sucursal_id <> ?)
+       ORDER BY s.orden ASC, s.nombre ASC, s.seccion_id ASC`,
+      [empresaId, sucursalId]
+    );
+
+    const data = await attachSeccionSucursal(rows);
+    return res.json({ data, meta: { total: data.length } });
+  } catch (error) {
+    console.error('secciones disponibles error:', error);
+    return res.status(500).json({ error: 'Error al listar secciones disponibles' });
   }
 });
 
@@ -191,7 +246,8 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Seccion no encontrada' });
     }
 
-    return res.json(rows[0]);
+    const [data] = await attachSeccionSucursal(rows);
+    return res.json(data);
   } catch (error) {
     console.error('seccion getById error:', error);
     return res.status(500).json({ message: 'Error al obtener seccion' });
@@ -231,7 +287,8 @@ router.post('/', async (req, res) => {
       [ins.insertId, empresaId]
     );
 
-    return res.status(201).json(rows[0]);
+    const [data] = await attachSeccionSucursal(rows);
+    return res.status(201).json(data);
   } catch (error) {
     console.error('seccion create error:', error);
     return res.status(500).json({ error: 'Error al crear seccion' });
@@ -301,7 +358,8 @@ router.put('/:id', async (req, res) => {
       [id, empresaId]
     );
 
-    return res.json(rows[0]);
+    const [data] = await attachSeccionSucursal(rows);
+    return res.json(data);
   } catch (error) {
     console.error('seccion update error:', error);
     return res.status(500).json({ error: 'Error al actualizar seccion' });
@@ -318,19 +376,40 @@ router.delete('/:id', async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'seccion_id inválido' });
 
-    const [rows] = await pool.query(
-      `SELECT s.seccion_id
-       FROM secciones s
-       INNER JOIN sucursales su ON su.sucursal_id = s.sucursal_id
-       WHERE s.seccion_id = ? AND su.empresa_id = ?
-       LIMIT 1`,
-      [id, empresaId]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Seccion no encontrada' });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    await pool.query('UPDATE empleados SET seccion_id = NULL WHERE empresa_id = ? AND seccion_id = ?', [empresaId, id]);
-    await pool.query('DELETE FROM secciones WHERE seccion_id = ?', [id]);
-    return res.json({ ok: true });
+      const [rows] = await connection.query(
+        `SELECT s.seccion_id, s.nombre
+         FROM secciones s
+         INNER JOIN sucursales su ON su.sucursal_id = s.sucursal_id
+         WHERE s.seccion_id = ? AND su.empresa_id = ?
+         LIMIT 1`,
+        [id, empresaId]
+      );
+      if (!rows.length) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'Seccion no encontrada' });
+      }
+
+      await connection.query('UPDATE empleados SET seccion_id = NULL WHERE seccion_id = ?', [id]);
+      await connection.query('UPDATE cargos SET seccion_id = NULL WHERE seccion_id = ? AND empresa_id = ?', [id, empresaId]);
+      await connection.query('DELETE FROM secciones WHERE seccion_id = ?', [id]);
+
+      await connection.commit();
+
+      return res.status(200).json({
+        ok: true,
+        message: `La seccion "${rows[0].nombre}" fue eliminada y se liberaron sus referencias.`,
+        seccion_id: id,
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('seccion delete error:', error);
     return res.status(500).json({ error: 'Error al eliminar seccion' });

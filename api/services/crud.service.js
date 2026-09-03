@@ -61,7 +61,7 @@ export function createCrudController(config) {
     async list(req, res) {
       try {
         const filters = {};
-        if (companyScoped) filters[companyField] = req.user?.empresa_id ?? req.query[companyField];
+        if (companyScoped) filters[companyField] = req.user?.empresa_id;
         // ignore common control/query params that are not table columns
         const ignoredQueryParams = ['page', 'per_page', 'perPage', 'limit', 'offset', 'q', 'search', 'order', 'sort'];
         Object.entries(req.query).forEach(([key, value]) => {
@@ -86,7 +86,7 @@ export function createCrudController(config) {
     async getById(req, res) {
       try {
         const filters = { [pk]: req.params.id };
-        if (companyScoped) filters[companyField] = req.user?.empresa_id ?? req.query[companyField];
+        if (companyScoped) filters[companyField] = req.user?.empresa_id;
         const { whereSql, params } = buildWhere(filters, table);
         const row = await queryOne(
           `SELECT ${listColumns.join(', ')} FROM ${table} ${getJoin} ${whereSql} LIMIT 1`,
