@@ -82,6 +82,7 @@ function mapEmployeeRow(row) {
     convenio_categoria_id: row.convenio_categoria_id,
     dias_trabajados: row.dias_trabajados,
     forma_pago_id: row.forma_pago_id,
+    obra_social_id: row.obra_social_id,
     foto: row.foto,
     habilitado: row.habilitado,
     estado: mapEmployeeState(row),
@@ -633,7 +634,7 @@ export function createEmployeeService() {
         await pool.query(
           `UPDATE empleados SET sucursal_id = ?, seccion_id = ?, cargo_id = ?, legajo = ?, tipo_documento = ?, numero_documento = ?, nombre = ?, apellido = ?,
            fecha_nacimiento = ?, sexo = ?, estado_civil = ?, nacionalidad = ?, direccion = ?, localidad = ?, telefono = ?, email = ?,
-           fecha_ingreso = ?, fecha_egreso = ?, tipo_contratacion_id = ?, convenio_categoria_id = ?, dias_trabajados = ?, forma_pago_id = ?, foto = ?, habilitado = ?, estado = ?
+           fecha_ingreso = ?, fecha_egreso = ?, tipo_contratacion_id = ?, convenio_categoria_id = ?, dias_trabajados = ?, forma_pago_id = ?, obra_social_id = ?, foto = ?, habilitado = ?, estado = ?
            WHERE empleado_id = ? AND empresa_id = ?`,
           [
             payload.sucursal_id ?? null, payload.seccion_id ?? null, payload.cargo_id ?? null, payload.legajo,
@@ -641,7 +642,7 @@ export function createEmployeeService() {
             payload.sexo ?? null, normalizeEstadoCivil(payload.estado_civil), payload.nacionalidad ?? null, payload.direccion ?? null,
             payload.localidad ?? null, payload.telefono ?? null, payload.email ?? null,
             nullIfEmpty(payload.fecha_ingreso) ?? null, nullIfEmpty(payload.fecha_egreso) ?? null, payload.tipo_contratacion_id ?? null,
-            payload.convenio_categoria_id ?? null, payload.dias_trabajados ?? null, payload.forma_pago_id,
+            payload.convenio_categoria_id ?? null, payload.dias_trabajados ?? null, payload.forma_pago_id, payload.obra_social_id ?? null,
             payload.foto ?? null, /* ignorar payload.habilitado en update; mantener valor actual */ current.habilitado, resolveEmployeeState(payload, current.estado), req.params.id, empresaId,
           ]
         );

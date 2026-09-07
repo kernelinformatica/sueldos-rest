@@ -1,0 +1,49 @@
+CONTEXTO: Motor de liquidación de sueldos — SueldosWeb/rest (Node ESM + Express + mysql2 raw)
+
+Reemplazamos el sistema legacy (2 stored procedures Sybase con fórmulas hardcodeadas por "grupo
+mágico" 1-10 y por código de concepto tipo 30/616) por un motor nuevo, data-driven, multiempresa.
+
+ESQUEMA YA APLICADO EN LA BD (por el usuario, vía HeidiSQL, no vía los .sql del repo):
+- Catálogos multiempresa (NO enum): `formula_tipos` y `modos_pago`
+  (id PK, empresa_id NULL=global u override por empresa, codigo, nombre, descripcion, activo, orden).
+- `conceptos.formula_tipo_id` FK -> formula_tipos.
+- `contrataciones_tipos.modo_pago_id` FK -> modos_pago.
+- `liquidaciones_detalle` +: formula_tipo_id FK, suma_resta, tope_aplicado_id FK a conceptos_topes,
+  importe_original, requiere_revision, advertencia.
+- `liquidaciones` +: periodo_id FK, liquidacion_tipo_id FK, total_haberes, total_descuentos,
+  total_neto, total_contribuciones, total_costo_empresa, requiere_revision, calculado_en;
+  UNIQUE(empresa_id, empleado_id, periodo_id).
+- OJO: db/migrations/005 y /008 en el repo quedaron desactualizados (usan ENUM, no catálogos).
+  007 también hay que corregirlo: formula_tipo es FK entera, no varchar. Revisar contra
+  INFORMATION_SCHEMA antes de asumir nombres/ids.
+
+SEMÁNTICA DE CADA formula_tipo QUE EL MOTOR DEBE IMPLEMENTAR:
+- BASICO: desde empleados_salarios vigente (SIEMPRE manda, no convenios_categorias.sueldo_basico).
+- FIJO: importe_fijo (o override empleados_conceptos.importe) × unidades.
+- PRESENTISMO: básico × multiplicador/divisor.
+- ANTIGUEDAD: años de antigüedad × (suma de conceptos del grupo_id referenciado × multi/divisor).
+- PORCENTAJE_REMUNERATIVO: % sobre la suma de haberes remunerativos (tipo HABER_CON_DESC) ya
+  calculados en el período — así se usa para aportes/contribuciones (jubilación, obra social, etc).
+- PORCENTAJE_CATEGORIA: % sobre convenios_categorias.sueldo_basico (escala convenio).
+- SUMA_GRUPO: suma de conceptos listados en grupos_conceptos_detalle del grupo_id del concepto.
+- HORAS_EXTRA_50/100: desde empleados_asistencia (horas_extras_50/100 del período) × valor_hora ×
+  multiplicador/divisor (define el recargo, sin hardcodear 1.5x/2x).
+- SAC: mejor remuneración remunerativa mensual del semestre / 2, prorrateado; sin hardcodear mes 6/12.
+- MANUAL: importe cargado a mano, fallback por defecto.
+
+DECISIONES YA CONFIRMADAS (no volver a preguntar):
+1. Catálogos de tabla multiempresa, no enum.
+2. liquidaciones=cabecera, liquidaciones_detalle=detalle (liquidaciones_conceptos sin uso).
+3. Sueldo básico SIEMPRE desde empleados_salarios.
+4. Motor completo de una vez (no por fases).
+5. Horas extra desde empleados_asistencia (no carga manual).
+
+PENDIENTE DE CÓDIGO (nada de esto existe todavía):
+- api/utils/topes.util.js (extraer de concepto.routes.js + aplicarTope() para uso en batch:
+  reject en batch = clamp + requiere_revision=1, no bloquea toda la corrida).
+- api/models/concepto.model.js: agregar formula_tipo_id a columns.
+- api/services/liquidacion/{formulas.js, contexto.service.js, motor.js} — motor.js resuelve
+  dependencias entre conceptos de forma ITERATIVA (no por prioridad fija ni pases numerados).
+- Reescribir api/services/liquidacion.service.js y api/routes/liquidacion.routes.js.
+- Reglas de estado: solo recalcular en estado Edición; cerrar bloquea.
+- Corregir migrations 005/007/008 en el repo para que coincidan con lo aplicado en la BD real.

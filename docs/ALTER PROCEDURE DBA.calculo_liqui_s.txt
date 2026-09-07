@@ -1,0 +1,66 @@
+ALTER PROCEDURE "DBA"."calculo_liqui_sueldos"(in m_empre decimal(3),in m_lega decimal(4),in m_lega1 decimal(4),in m_mes decimal(2),in m_anio decimal(4),in liqui decimal(1),in ope varchar(5),in control varchar(20),in d_habil decimal(2),in d_horas decimal(2))
+begin
+  declare noesta exception for sqlstate value '02000';
+  declare cur dynamic scroll cursor for select e_nro,e_liqui,e_dias,e_liquida,cat_nro from
+      sue_empleados where
+      e_empre=m_empre and e_nro between m_lega and m_lega1 order by
+      e_nro asc;
+  declare c_lega decimal(4);
+  declare c_tipo decimal(1);
+  declare c_dias decimal(2);
+  declare c_liqui varchar(1);
+  declare c_cate decimal(2);
+  declare c_impor decimal(10,2);
+  declare blanco varchar(15);
+  declare f_auxi date;
+  declare c_categ1 decimal(10,2);
+  declare c_categ2 decimal(10,2);
+  declare uno decimal(2);
+  declare dos decimal(2);
+  declare c_prese decimal(6,2);
+  declare c_unidad decimal(6,2);
+  declare f_pago date;
+  set c_impor=0;
+  set blanco=' ';
+  set f_auxi=today(*);
+  set uno=1;
+  set dos=2;
+  select sue_categorias.cat_sueldos into c_categ1
+    from sue_categorias where sue_categorias.cat_nro=uno;
+  select sue_categorias.cat_sueldos into c_categ2
+    from sue_categorias where sue_categorias.cat_nro=dos;
+  select sue_empresa.fec_pago into f_pago from sue_empresa where
+    sue_empresa.e_empre=m_empre;
+  delete from sue_encabeza_resumen;
+  // Abro el Cursor para taer c/empleado  
+  open cur;
+  salgocur: loop
+    fetch next cur into c_lega,c_tipo,c_dias,c_liqui,c_cate;
+    if sqlstate=noesta then leave salgocur
+    end if;
+    set m_lega=c_lega;
+    select sue_categorias.cat_sueldos,sue_categorias.cat_prese into c_impor,
+      c_prese from sue_categorias where
+      sue_categorias.cat_nro=c_cate;
+    //Borro el sueldo de la tabla Liqui_master si no esta cerrado
+    delete from sue_liqui_master where e_empre=m_empre and e_nro=m_lega and liq_mes=m_mes and liq_anio= m_anio and liq_asiento= 0 and m_liqui=liqui;
+    if c_liqui='S' then
+      if c_impor<>0 then
+        if c_tipo=1 then
+          //Inserto el Sueldo Basico
+          set c_unidad=(d_habil*d_horas);
+          insert into dba.sue_liqui_master(e_empre,e_nro,co_codigo,liq_mes,liq_anio,liq_conta,liq_unidad,liq_importe,liq_asiento,m_liqui,ope_codigo,ope_control,liq_pago) values(m_empre,m_lega,1,m_mes,m_anio,liqui,c_unidad,c_impor,0,liqui,ope,control,f_pago)
+        elseif c_tipo=2 then
+          //Calculo los dias trabajados y cargo el sueldo basico
+          set c_impor=(c_impor/d_habil)*c_dias;
+          insert into dba.sue_liqui_master(e_empre,e_nro,co_codigo,liq_mes,liq_anio,liq_conta,liq_unidad,liq_importe,liq_asiento,m_liqui,ope_codigo,ope_control,liq_pago) values(m_empre,m_lega,1,m_mes,m_anio,liqui,c_dias,c_impor,0,liqui,ope,control,f_pago)
+        end if;
+        if c_tipo<>3 then
+          insert into dba.sue_encabeza_resumen(e_empre,e_nro,ope_codigo,e_nombre,e_domici,e_tipo,e_numero,e_fec_nac,e_fec_ing,sec_nro,cat_nro,mes,anio,fec_pago,mes_periodo,anio_periodo,fec_deposito,banco,e_concepto,e_basico,e_unidad,e_impor1,e_impor2,e_impor3) values(m_empre,m_lega,ope,blanco,blanco,0,0,f_auxi,f_auxi,0,0,0,0,f_auxi,0,0,f_auxi,blanco,blanco,c_impor,c_prese,c_categ1,c_categ2,0)
+        end if
+      end if
+    end if
+  end loop salgocur;
+  close cur;
+  commit work
+end

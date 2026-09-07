@@ -22,6 +22,7 @@ import cargoRouter from './routes/cargo.routes.js';
 import seccionRouter from './routes/seccion.routes.js';
 import provinciaRouter from './routes/provincia.routes.js';
 import bancoRouter from './routes/banco.routes.js';
+import obraSocialRouter from './routes/obraSocial.routes.js';
 import empleadoRouter from './routes/empleado.routes.js';
 import convenioRouter from './routes/convenio.routes.js';
 import convenioCategoriaRouter from './routes/convenioCategoria.routes.js';
@@ -30,8 +31,10 @@ import formaPagoRouter from './routes/formaPago.routes.js';
 import localidadRouter from './routes/localidad.routes.js';
 import estadoRouter from './routes/estado.routes.js';
 import estadoEmpleadoRouter from './routes/estadoEmpleado.routes.js';
+import estadoLiquidacionRouter from './routes/estadoLiquidacion.routes.js';
 import conceptoRouter from './routes/concepto.routes.js';
 import conceptoTipoRouter from './routes/conceptoTipo.routes.js';
+import formulaTipoRouter from './routes/formulaTipo.routes.js';
 import grupoConceptoRouter from './routes/grupoConcepto.routes.js';
 import grupoConceptoDetalleRouter from './routes/grupoConceptoDetalle.routes.js';
 import periodoLiquidacionRouter from './routes/periodoLiquidacion.routes.js';
@@ -61,7 +64,7 @@ console.log(`Host configurado : ${DOMAIN}:${PORT}`);
 const FRONTEND_ORIGIN = process.env.CORS_ORIGIN;
 app.use(cors({
   origin: FRONTEND_ORIGIN,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
@@ -124,6 +127,7 @@ app.use('/api/cargos', cargoRouter);
 app.use('/api/secciones', seccionRouter);
 app.use('/api/provincias', provinciaRouter);
 app.use('/api/bancos', bancoRouter);
+app.use('/api/obras-sociales', obraSocialRouter);
 app.use('/api/empleados', empleadoRouter);
 app.use('/api/convenios', convenioRouter);
 app.use('/api/convenios-categorias', convenioCategoriaRouter);
@@ -132,8 +136,10 @@ app.use('/api/formas-pago', formaPagoRouter);
 app.use('/api/localidades', localidadRouter);
 app.use('/api/estados', estadoRouter);
 app.use('/api/estados-empleados', estadoEmpleadoRouter);
+app.use('/api/estados-liquidaciones', estadoLiquidacionRouter);
 app.use('/api/conceptos', conceptoRouter);
 app.use('/api/conceptos_tipos', conceptoTipoRouter);
+app.use('/api/formula-tipos', formulaTipoRouter);
 app.use('/api/grupos_conceptos_master', grupoConceptoRouter);
 app.use('/api/grupos_conceptos_detalle', grupoConceptoDetalleRouter);
 app.use('/api/periodos-liquidacion', periodoLiquidacionRouter);

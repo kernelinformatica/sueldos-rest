@@ -1,0 +1,266 @@
+ALTER PROCEDURE "DBA"."calculo_liqui_conceptos"(in m_empre decimal(3),in m_lega decimal(4),in m_lega1 decimal(4),in m_mes decimal(2),in m_anio decimal(4),in liqui decimal(1),in ope varchar(5),in control varchar(20),in d_habil decimal(2),in d_horas decimal(2))
+begin
+  declare noesta exception for sqlstate value '02000';
+  declare cur dynamic scroll cursor for select e_nro,e_liquida from
+      sue_empleados where
+      e_empre=m_empre and e_nro between m_lega and m_lega1 order by
+      e_nro asc;
+  declare cur1 dynamic scroll cursor for select co_codigo,m_unidad,m_importe from
+      sue_emple_master where
+      e_empre=m_empre and e_nro=m_lega and m_liqui=liqui order by
+      e_empre asc,
+      e_nro asc,
+      co_codigo asc;
+  declare cur2 dynamic scroll cursor for select co_codigo from
+      sue_grupos where
+      agru_codigo=s_grupo and e_empre=m_empre order by
+      agru_codigo asc,
+      e_empre asc,
+      co_codigo asc;
+  declare cur3 dynamic scroll cursor for select e_empre,e_nro,liq_mes,liq_anio,m_liqui,sum(liq_importe) from
+      sue_liqui_master where
+      sue_liqui_master.e_empre=m_empre
+      and sue_liqui_master.e_nro=c_lega
+      and sue_liqui_master.liq_mes=m_mes
+      and sue_liqui_master.liq_anio=m_anio
+      and sue_liqui_master.m_liqui=liqui
+      and sue_liqui_master.co_codigo<200
+      group by e_empre,e_nro,liq_mes,liq_anio,m_liqui;
+  declare fecha_pago date;
+  declare au_codi decimal(4);declare c_lega decimal(4);declare c_liqui varchar(1);
+  declare au_fec date;declare au_unidad decimal(6,2);declare s_fijo decimal(10,2);
+  declare s_multi decimal(6,2);declare s_divide decimal(6,2);declare s_grupo decimal(3);
+  declare s_total decimal(10,2);declare au_codi1 decimal(4);declare au_impor decimal(10,2);
+  declare s_auxi decimal(10,2);declare uno decimal(2);declare s_total1 decimal(10,2);
+  declare s_basico decimal(10,2);declare s_prese decimal(6,2);declare f_pago date;
+  declare c_impor1 decimal(10,2);declare s_total2 decimal(10,2);declare s_tot_hs decimal(4);
+  declare c_import_resta decimal(10,2);
+  declare s_total3 decimal(10,2);
+  declare au_empre decimal(3);declare au_lega decimal(4);declare au_mes decimal(2);
+  declare au_anio decimal(4);declare au_liqui decimal(1);
+  declare ant_dias numeric(2);
+  declare ant_meses numeric(2);
+  declare ant_anos numeric (2);
+  declare porcentaje decimal (10,2);
+ declare c_tipo decimal(2);
+    declare mes_ingreso decimal(2,0);
+    declare fecha_ingreso date;
+    declare mes_liquidacion decimal(2);
+declare sueldo_bruto decimal(10,2);
+declare co_cereal decimal (2);
+declare co_sucursal decimal (2);
+  set uno=1;
+  select sue_empresa.fec_pago into f_pago from sue_empresa where sue_empresa.e_empre=m_empre;
+  select mes  into mes_liquidacion from sue_empresa where e_empre = m_empre;
+  //Abro el cursor para traer a todos los Empleados
+  open cur;
+  salgocur: loop
+    fetch next cur into c_lega,c_liqui;
+    if sqlstate=noesta then leave salgocur
+    end if;
+    set s_total=0;
+    set s_total1=0;
+    set s_total2=0;
+    set s_total3=0;
+    set s_tot_hs=0;
+    set m_lega=c_lega;
+    //Tomo de la tabla Auxiliar el Basico y el Presentismo de c/Legajo
+    select sue_encabeza_resumen.e_basico,sue_encabeza_resumen.e_unidad into s_basico,s_prese from sue_encabeza_resumen where
+      sue_encabeza_resumen.e_empre=m_empre and sue_encabeza_resumen.e_nro=m_lega
+      and sue_encabeza_resumen.ope_codigo=ope;
+     
+    if c_liqui='S' then
+      open cur1;
+      salgocur1: loop
+        fetch next cur1 into au_codi,au_unidad,au_impor;
+        if sqlstate=noesta then leave salgocur1
+        end if;
+
+        select sue_conceptos.agru_codigo,sue_conceptos.co_fijo,sue_conceptos.co_multi,
+          sue_conceptos.co_divide, sue_conceptos.importe_resta , co_tipo into s_grupo,s_fijo,s_multi,
+          s_divide, c_import_resta, c_tipo from sue_conceptos where sue_conceptos.co_codigo=au_codi;
+        //Analizo el Concepto, que grupo tiene para realizar el Calculo
+        if s_grupo=1 then
+          set s_total=(s_basico*s_prese)/100
+       
+         elseif s_grupo=2 then
+         //////////////////////////
+        
+            // CALCULO ANTIGUEDAD AUTOMATICA
+           
+             if au_codi = 30 then
+               
+                set fecha_pago = date(string(m_anio)+'-'+string(m_mes)+'-'+ '01');
+                SELECT   abs(DATEDIFF(yy,fecha_pago, "sue_empleados"."e_fec_ing")) into ant_anos
+                FROM "sue_empleados"  
+                WHERE ( "sue_empleados"."e_liquida" = 'S' ) AND  
+                     ( "sue_empleados"."e_empre"  = m_empre ) AND  
+                     ( "sue_empleados"."e_nro" = m_lega ); 
+                    select month (e_fec_ing) into mes_ingreso from sue_empleados where e_nro = m_lega;
+                     if m_mes < mes_ingreso  then
+                        set ant_anos = ant_anos-1;
+                        set au_unidad = ant_anos;
+                    else
+                        set ant_anos = ant_anos;
+                        set au_unidad = ant_anos;
+                    end if;
+               // traigo el sueldo basico+ codigo 80 del empleado
+              select sum(sue_liqui_master.liq_importe) into au_impor
+              from sue_liqui_master where
+              sue_liqui_master.e_empre=m_empre and sue_liqui_master.e_nro=m_lega
+              and sue_liqui_master.co_codigo in (10, 29) and sue_liqui_master.liq_mes=m_mes
+              and sue_liqui_master.liq_anio=m_anio and sue_liqui_master.m_liqui=liqui;
+                // la antiguedad es el 1 % del sueldo basico del empleado
+               set porcentaje = (au_impor*1)/100;
+               set s_total=ant_anos*porcentaje;
+             else
+               set s_total=au_unidad*s_fijo
+             end if;
+          //////////////////////////
+         
+	
+          
+        elseif s_grupo=3 then
+          set s_total=au_unidad*au_impor
+        elseif s_grupo=4 then
+          set s_total=(au_unidad*s_fijo)*s_multi/s_divide
+        elseif s_grupo=5 then
+
+
+
+          set s_total=((s_basico*s_multi)/s_divide)*au_unidad
+
+
+
+
+        elseif s_grupo=6 then
+          select sue_categorias.cat_sueldos into c_impor1
+            from sue_categorias,sue_empleados where
+            sue_categorias.cat_nro=sue_empleados.cat_nro
+            and sue_empleados.e_nro=m_lega;
+          set s_total=((c_impor1*s_multi)/s_divide)*au_unidad
+        elseif s_grupo=7 then
+          set s_tot_hs=(d_habil);
+          //set s_tot_hs=(d_habil*d_horas);
+          open cur3;
+          salgocur3: loop
+            fetch next cur3 into au_empre,au_lega,au_mes,au_anio,au_liqui,s_total2;
+            if sqlstate=noesta then leave salgocur3
+            end if
+          end loop salgocur3;
+          close cur3;
+          set s_total=(((s_total2/s_tot_hs)+((s_total2/s_tot_hs)*50/100))*au_unidad)
+        elseif s_grupo=8 then
+          set s_tot_hs=(d_habil*d_horas);
+          open cur3;
+          salgocur3: loop
+            fetch next cur3 into au_empre,au_lega,au_mes,au_anio,au_liqui,s_total3;
+            if sqlstate=noesta then leave salgocur3
+            end if
+          end loop salgocur3;
+          close cur3;
+          set s_total=(((s_total3/s_tot_hs)*2)*au_unidad)
+        elseif s_grupo=9 then
+          select sue_categorias.cat_sueldos into c_impor1
+            from sue_categorias,sue_empleados where
+            sue_categorias.cat_nro=sue_empleados.cat_nro
+            and sue_empleados.e_nro=m_lega;
+          open cur2;
+          salgocur2: loop
+            fetch next cur2 into au_codi1;
+            if sqlstate=noesta then leave salgocur2
+            end if;
+            select sue_liqui_master.liq_importe into au_impor
+              from sue_liqui_master where
+              sue_liqui_master.e_empre=m_empre and sue_liqui_master.e_nro=m_lega
+              and sue_liqui_master.co_codigo=au_codi1 and sue_liqui_master.liq_mes=m_mes
+              and sue_liqui_master.liq_anio=m_anio and sue_liqui_master.m_liqui=liqui;
+            set s_total1=s_total1+au_impor;
+            set au_impor=0
+          end loop salgocur2;
+          close cur2;
+          set s_total=(((c_impor1+s_total1)*s_multi)/s_divide)*au_unidad
+        elseif s_grupo=10 then
+          set s_total=((s_basico*s_multi)/s_divide)
+
+
+          
+          
+             
+        else
+          //Buscar y sumar todos los conceptos de la tabla sue_grupos
+          open cur2;
+          salgocur2: loop
+            fetch next cur2 into au_codi1;
+            if sqlstate=noesta then leave salgocur2
+            end if;
+            select sue_liqui_master.liq_importe into au_impor
+              from sue_liqui_master where
+              sue_liqui_master.e_empre=m_empre and sue_liqui_master.e_nro=m_lega
+              and sue_liqui_master.co_codigo=au_codi1 and sue_liqui_master.liq_mes=m_mes
+              and sue_liqui_master.liq_anio=m_anio and sue_liqui_master.m_liqui=liqui;
+            set s_total1=s_total1+au_impor;
+            set au_impor=0
+          end loop salgocur2;
+          close cur2;
+          set s_total=((s_total1*s_multi)/s_divide)*au_unidad
+        end if;
+        
+		if c_tipo = 5 then
+			if c_import_resta > 0 then
+			//(sueldo_bruto (s_total1) - 2400) *  porcentaje/100 
+			// calculo el sueldo bruto
+		   	set s_total= (((s_total1-c_import_resta)*s_multi)/s_divide)*au_unidad
+			
+		end if;
+		end if;
+        // OTRA ANTIGUEDAD
+        if au_codi = 616  then
+                set fecha_pago = date(string(m_anio)+'-'+string(m_mes)+'-'+ '01');
+                SELECT   abs(DATEDIFF(yy,fecha_pago, "sue_empleados"."e_fec_ing")) into ant_anos
+                FROM "sue_empleados"  
+                WHERE ( "sue_empleados"."e_liquida" = 'S' ) AND  
+                     ( "sue_empleados"."e_empre"  = m_empre ) AND  
+                     ( "sue_empleados"."e_nro" = m_lega ); 
+                    select month (e_fec_ing) into mes_ingreso from sue_empleados where e_nro = m_lega;
+                     if m_mes < mes_ingreso  then
+                        set ant_anos = ant_anos-1;
+                        set au_unidad = ant_anos;
+                    else
+                        set ant_anos = ant_anos;
+                        set au_unidad = ant_anos;
+                    end if;
+               select sum(sue_liqui_master.liq_importe) into au_impor
+              from sue_liqui_master where
+              sue_liqui_master.e_empre=m_empre and sue_liqui_master.e_nro=m_lega
+              and sue_liqui_master.co_codigo in (612, 614,610, 609, 608, 607,606) and sue_liqui_master.liq_mes=m_mes
+              and sue_liqui_master.liq_anio=m_anio and sue_liqui_master.m_liqui=liqui;
+                set porcentaje = (au_impor*1)/100;
+               set s_total=ant_anos*porcentaje;
+           
+            end if;
+		
+   
+
+
+
+
+        //Inserto el total en la tabla Master 
+        if au_codi = 30 or au_unidad = 616 then
+            set au_unidad = ant_anios;
+        end if;
+      
+
+        insert into dba.sue_liqui_master(e_empre,e_nro,co_codigo,liq_mes,liq_anio,liq_conta,liq_unidad,liq_importe,liq_asiento,m_liqui,ope_codigo,ope_control,liq_pago) values(
+          m_empre,m_lega,au_codi,m_mes,m_anio,liqui,au_unidad,s_total,0,liqui,ope,control,f_pago);
+        set s_total=0;
+        set s_total1=0;
+        set s_total2=0;
+        set s_total3=0
+      end loop salgocur1;
+      close cur1
+    end if;
+  end loop salgocur;
+  close cur;
+  commit work
+end

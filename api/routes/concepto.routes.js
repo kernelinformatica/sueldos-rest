@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middlewares/auth.middleware.js';
 import { createCrudController } from '../services/crud.service.js';
 import conceptoModel from '../models/concepto.model.js';
+import { computeTopValue, findTopApplicable } from '../utils/topes.util.js';
 import pool from '../db.js';
 
 // lazy Redis client: import/connect only if REDIS_URL is set and package is installed
@@ -28,11 +29,14 @@ const controller = createCrudController({
   columns: conceptoModel.columns,
   companyScoped: true,
   listOrderBy: 'concepto_id DESC',
-  nullableColumns: ['multiplicador', 'divisor', 'importe_fijo', 'detalle'],
+  nullableColumns: ['multiplicador', 'divisor', 'importe_fijo', 'detalle', 'formula_tipo_id'],
 });
 
 const router = Router();
 router.use(authenticateToken);
+
+const accionLabels = { reject: 'Rechazar', clamp: 'Ajustar', warn: 'Advertir' };
+const tipoLabels = { max: 'Máximo', min: 'Mínimo' };
 
 async function hasVerCatalogoPermission(rolId, empresaId) {
   const [rows] = await pool.query(
@@ -58,10 +62,6 @@ async function resolvePermiteImporte(empresaId, grupoId /* tipoId deprecated for
   return 0;
 }
 
-// etiquetas en español (UI-friendly)
-const accionLabels = { reject: 'Rechazar', clamp: 'Ajustar', warn: 'Advertir' };
-const tipoLabels = { max: 'Máximo', min: 'Mínimo' };
-
 async function hasPermission(alias, rolId, empresaId) {
   const [rows] = await pool.query(
     `SELECT COUNT(*) as cnt
@@ -71,37 +71,6 @@ async function hasPermission(alias, rolId, empresaId) {
     [alias, rolId, empresaId]
   );
   return rows[0].cnt > 0;
-}
-
-// Buscar el tope aplicable por prioridad: concepto -> grupo -> empresa/global
-async function findTopApplicable(empresaId, conceptoId, grupoId, fecha = null) {
-  const q = `
-    SELECT * FROM conceptos_topes t
-    WHERE t.empresa_id = ?
-      AND (t.concepto_id = ? OR (t.concepto_id IS NULL AND t.grupo_id = ?) OR (t.concepto_id IS NULL AND t.grupo_id IS NULL))
-      AND t.activo = 1
-      AND (t.fecha_desde IS NULL OR t.fecha_desde <= COALESCE(?, CURDATE()))
-      AND (t.fecha_hasta IS NULL OR t.fecha_hasta >= COALESCE(?, CURDATE()))
-    ORDER BY
-      CASE WHEN t.concepto_id IS NOT NULL THEN 1 WHEN t.grupo_id IS NOT NULL THEN 2 ELSE 3 END ASC,
-      t.tope_id DESC
-    LIMIT 1`;
-  const dateParam = fecha ?? null;
-  const [rows] = await pool.query(q, [empresaId, conceptoId, grupoId, dateParam, dateParam]);
-  if (!rows.length) return null;
-  const t = rows[0];
-  t.accion_label = accionLabels[t.accion] ?? t.accion;
-  t.tipo_label = tipoLabels[t.tipo] ?? t.tipo;
-  return t;
-}
-
-function computeTopValue(tope, baseValue = null) {
-  if (!tope) return null;
-  if (String(tope.unidad) === 'porcentaje') {
-    const base = baseValue ?? 0;
-    return Number(((base * Number(tope.valor)) / 100).toFixed(2));
-  }
-  return Number(tope.valor);
 }
 
 // Custom search endpoint with q, codigo, estado, pagination
@@ -139,8 +108,8 @@ router.get('/', async (req, res) => {
     }
 
     if (codigo) {
-      const code = `%${String(codigo).trim()}%`;
-      where.push('c.codigo LIKE ?');
+      const code = String(codigo).trim();
+      where.push('c.codigo = ?');
       params.push(code);
       // prefer codigo matches in ordering
     }
@@ -181,11 +150,13 @@ router.get('/', async (req, res) => {
     const orderBy = `COALESCE(ct.prioridad, 0) ASC, (CASE WHEN c.suma_resta = 'S' THEN 0 ELSE 1 END) ASC, c.codigo ASC`;
     const finalParams = [...params, limit, offset];
 
-            const sql = `SELECT c.concepto_id, c.empresa_id, c.codigo, c.descripcion, c.detalle, c.importe_fijo, c.multiplicador, c.divisor, c.suma_resta, c.es_sueldo_basico, c.sueldo_basico_key, c.tipo_concepto_id, c.grupo_id,
+            const sql = `SELECT c.concepto_id, c.empresa_id, c.codigo, c.descripcion, c.detalle, c.importe_fijo, c.multiplicador, c.divisor, c.suma_resta, c.es_sueldo_basico, c.sueldo_basico_key, c.tipo_concepto_id, c.formula_tipo_id, c.grupo_id,
                 ct.codigo AS tipo_codigo, ct.nombre AS tipo_nombre, ct.prioridad AS tipo_prioridad,
+                ft.codigo AS formula_tipo_codigo, ft.nombre AS formula_tipo_nombre,
                 g.grupo_id AS grupo_id_ref, g.nombre AS grupo_nombre, g.descripcion AS grupo_descripcion, g.permite_importe_fijo AS grupo_permite_importe_fijo
             FROM conceptos c
             LEFT JOIN conceptos_tipos ct ON ct.conceptos_tipos_id = c.tipo_concepto_id
+            LEFT JOIN formula_tipos ft ON ft.formula_tipo_id = c.formula_tipo_id
             LEFT JOIN grupos_conceptos_master g ON g.grupo_id = c.grupo_id
             ${whereSql}
               ORDER BY ${orderBy}
@@ -201,6 +172,11 @@ router.get('/', async (req, res) => {
         nombre: r.tipo_nombre ?? null,
         prioridad: r.tipo_prioridad ?? 0,
       };
+      const formulaTipo = {
+        formula_tipo_id: r.formula_tipo_id,
+        codigo: r.formula_tipo_codigo ?? null,
+        nombre: r.formula_tipo_nombre ?? null,
+      };
       const grupo = {
         grupo_id: r.grupo_id_ref ?? r.grupo_id,
         nombre: r.grupo_nombre ?? null,
@@ -213,11 +189,14 @@ router.get('/', async (req, res) => {
       delete out.tipo_codigo;
       delete out.tipo_nombre;
       delete out.tipo_prioridad;
+      delete out.formula_tipo_codigo;
+      delete out.formula_tipo_nombre;
       delete out.grupo_id_ref;
       delete out.grupo_nombre;
       delete out.grupo_descripcion;
       delete out.grupo_permite_importe_fijo;
       out.tipo_concepto = tipo;
+      out.formula_tipo = formulaTipo;
       out.grupo = grupo;
       // top-level convenience field for UI badges
       out.grupo_nombre = grupo.nombre ?? null;
