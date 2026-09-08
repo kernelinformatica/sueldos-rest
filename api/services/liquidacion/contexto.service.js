@@ -56,7 +56,7 @@ async function fetchConceptosAsignados(empresaId, empleadoId, fechaLiquidacion) 
      INNER JOIN conceptos c ON c.concepto_id = ec.concepto_id
      LEFT JOIN formula_tipos ft ON ft.formula_tipo_id = c.formula_tipo_id
      WHERE ec.empresa_id = ? AND ec.empleado_id = ? AND ec.fecha_asignacion <= ?
-     ORDER BY COALESCE(ft.orden, 9999) ASC, ec.fecha_asignacion ASC, ec.empleado_concepto_id ASC`,
+     ORDER BY COALESCE(ft.orden, 9999) ASC, c.codigo ASC, ec.fecha_asignacion ASC, ec.empleado_concepto_id ASC`,
     [empresaId, empleadoId, fechaLiquidacion]
   );
   return rows.map((row) => ({
@@ -65,6 +65,24 @@ async function fetchConceptosAsignados(empresaId, empleadoId, fechaLiquidacion) 
       ? Number(row.formula_tipo_orden)
       : null,
   }));
+}
+
+async function fetchGruposConceptosDetalle(empresaId) {
+  const [rows] = await pool.query(
+    `SELECT d.grupo_id, d.concepto_id
+     FROM grupos_conceptos_detalle d
+     INNER JOIN grupos_conceptos_master g ON g.grupo_id = d.grupo_id
+     WHERE g.empresa_id = ?`,
+    [empresaId]
+  );
+
+  return rows.reduce((acc, row) => {
+    const grupoId = Number(row.grupo_id);
+    const conceptoId = Number(row.concepto_id);
+    if (!acc[grupoId]) acc[grupoId] = new Set();
+    if (Number.isInteger(conceptoId) && conceptoId > 0) acc[grupoId].add(conceptoId);
+    return acc;
+  }, {});
 }
 
 export async function fetchEmpleadosActivosPorIds(empresaId, empleadoIds) {
@@ -95,6 +113,7 @@ export async function buildLiquidacionContext(empresaId, empleadoId, fechaDesde,
   const salario = await fetchSalarioVigente(empresaId, empleadoId, fechaLiquidacion);
   const asistencia = await fetchAsistenciaResumen(empresaId, empleadoId, fechaDesde, fechaHasta);
   const conceptos = await fetchConceptosAsignados(empresaId, empleadoId, fechaLiquidacion);
+  const gruposConceptos = await fetchGruposConceptosDetalle(empresaId);
 
   return {
     empresaId,
@@ -102,6 +121,7 @@ export async function buildLiquidacionContext(empresaId, empleadoId, fechaDesde,
     salario,
     asistencia,
     conceptos,
+    gruposConceptos,
     fechaDesde,
     fechaHasta,
     fechaLiquidacion,

@@ -3,6 +3,7 @@ import { formulaResolvers } from './formulas.js';
 function resolveFormulaKey(concepto) {
   const codigo = String(concepto.codigo ?? '').trim();
   const descripcion = String(concepto.descripcion ?? '').trim().toLowerCase();
+  const tieneGrupo = concepto.grupo_id !== null && concepto.grupo_id !== undefined && concepto.grupo_id !== '';
 
   if (concepto.formula_tipo_codigo || concepto.formula_tipo) {
     return concepto.formula_tipo_codigo || concepto.formula_tipo;
@@ -16,6 +17,9 @@ function resolveFormulaKey(concepto) {
   if (descripcion === 'sac') {
     return 'SAC';
   }
+  if (tieneGrupo) {
+    return 'SUMA_GRUPO';
+  }
   return 'MANUAL';
 }
 
@@ -28,12 +32,23 @@ function esFormulaDependiente(formulaKey) {
   return formulaKey === 'PRESENTISMO'
     || formulaKey === 'ANTIGUEDAD'
     || formulaKey === 'PORCENTAJE_REMUNERATIVO'
-    || formulaKey === 'PORCENTAJE_GRUPO';
+    || formulaKey === 'PORCENTAJE_GRUPO'
+    || formulaKey === 'SUMA_GRUPO';
 }
 
 function getFormulaOrden(concepto) {
   const orden = Number(concepto.formula_tipo_orden);
   return Number.isFinite(orden) ? orden : 9999;
+}
+
+function getConceptoCodigoOrden(concepto) {
+  const codigo = String(concepto.codigo ?? '').trim();
+  const numeric = Number(codigo);
+  if (codigo !== '' && Number.isFinite(numeric)) {
+    return { tipo: 0, valor: numeric };
+  }
+
+  return { tipo: 1, valor: codigo.toUpperCase() };
 }
 
 async function calcularYRegistrarConcepto(concepto, contexto, resueltos, aplicarTopeFn, resultados) {
@@ -108,8 +123,25 @@ export async function ejecutarMotorLiquidacion(contexto, aplicarTopeFn) {
     const conceptosOrdenados = pendientes
       .map((concepto, index) => ({ concepto, index }))
       .sort((a, b) => {
+        const prioridadTipoA = Number(a.concepto.tipo_concepto_prioridad ?? a.concepto.tipo_prioridad ?? a.concepto.tipo_concepto?.prioridad ?? 0);
+        const prioridadTipoB = Number(b.concepto.tipo_concepto_prioridad ?? b.concepto.tipo_prioridad ?? b.concepto.tipo_concepto?.prioridad ?? 0);
+        if (prioridadTipoA !== prioridadTipoB) return prioridadTipoA - prioridadTipoB;
+
+        const esContribucionA = Number(a.concepto.tipo_concepto_id) === 5 || String(a.concepto.formula_tipo ?? '').toUpperCase() === 'SAC';
+        const esContribucionB = Number(b.concepto.tipo_concepto_id) === 5 || String(b.concepto.formula_tipo ?? '').toUpperCase() === 'SAC';
+        if (esContribucionA !== esContribucionB) return esContribucionA ? 1 : -1;
+
+        const sumaA = a.concepto.suma_resta === 'S' ? 0 : 1;
+        const sumaB = b.concepto.suma_resta === 'S' ? 0 : 1;
+        if (sumaA !== sumaB) return sumaA - sumaB;
+
         const diffOrden = getFormulaOrden(a.concepto) - getFormulaOrden(b.concepto);
         if (diffOrden !== 0) return diffOrden;
+        const codigoA = getConceptoCodigoOrden(a.concepto);
+        const codigoB = getConceptoCodigoOrden(b.concepto);
+        if (codigoA.tipo !== codigoB.tipo) return codigoA.tipo - codigoB.tipo;
+        if (codigoA.valor < codigoB.valor) return -1;
+        if (codigoA.valor > codigoB.valor) return 1;
         return a.index - b.index;
       });
 
@@ -126,6 +158,9 @@ export async function ejecutarMotorLiquidacion(contexto, aplicarTopeFn) {
         }
         if (formulaKey === 'PORCENTAJE_GRUPO') {
           return Boolean(sumaGrupo);
+        }
+        if (formulaKey === 'SUMA_GRUPO') {
+          return Boolean(sumaGrupo || concepto.grupo_id);
         }
         if (formulaKey === 'PORCENTAJE_REMUNERATIVO') {
           return Boolean(contexto.baseRemunerativa || contexto.basalario);
@@ -178,7 +213,14 @@ export async function ejecutarMotorLiquidacion(contexto, aplicarTopeFn) {
 function calcularSumaGrupo(contexto, concepto, resueltos) {
   const grupoId = concepto.grupo_id;
   if (!grupoId) return 0;
-  return (contexto.conceptos || [])
-    .filter((item) => item.grupo_id === grupoId && resueltos.has(item.concepto_id))
-    .reduce((acc, item) => acc + Number(resueltos.get(item.concepto_id)?.importe || 0), 0);
+  const miembrosGrupo = contexto.gruposConceptos?.[Number(grupoId)];
+  const conceptosDelGrupo = Array.isArray(miembrosGrupo)
+    ? miembrosGrupo
+    : miembrosGrupo instanceof Set
+      ? Array.from(miembrosGrupo)
+      : (contexto.conceptos || [])
+        .filter((item) => Number(item.grupo_id) === Number(grupoId))
+        .map((item) => item.concepto_id);
+
+  return conceptosDelGrupo.reduce((acc, conceptoId) => acc + Number(resueltos.get(Number(conceptoId))?.importe || 0), 0);
 }

@@ -319,6 +319,12 @@ router.get('/:id/conceptos', async (req, res) => {
 					c.codigo AS c_codigo,
 					c.detalle AS c_detalle,
 					c.suma_resta AS c_suma_resta,
+					c.importe_fijo AS c_importe_fijo,
+					c.multiplicador AS c_multiplicador,
+					c.divisor AS c_divisor,
+					c.es_sueldo_basico AS c_es_sueldo_basico,
+					c.grupo_id AS c_grupo_id,
+					c.formula_tipo_id AS c_formula_tipo_id,
 					    ec.unidades AS unidades,
 					    ec.importe AS importe,
 					c.tipo_concepto_id,
@@ -326,13 +332,28 @@ router.get('/:id/conceptos', async (req, res) => {
 						ct.descripcion AS tipo_descripcion,
 						ct.codigo AS tipo_codigo,
 						ct.prioridad AS ct_tipo_prioridad,
+					ft.formula_tipo_id AS ft_formula_tipo_id,
+					ft.codigo AS ft_codigo,
+					ft.nombre AS ft_nombre,
+					ft.descripcion AS ft_descripcion,
+					ft.orden AS ft_orden,
+					ft.activo AS ft_activo,
+					g.grupo_id AS g_grupo_id,
+					g.codigo AS g_codigo,
+					g.nombre AS g_nombre,
+					g.descripcion AS g_descripcion,
+					g.comentario AS g_comentario,
+					g.orden AS g_orden,
+					g.permite_importe_fijo AS g_permite_importe_fijo,
+					g.es_default_sistema AS g_es_default_sistema,
 							ec.fecha_asignacion
 				 FROM empleados_conceptos ec
 			 INNER JOIN conceptos c ON c.concepto_id = ec.concepto_id
 			 LEFT JOIN conceptos_tipos ct ON ct.conceptos_tipos_id = c.tipo_concepto_id
+			 LEFT JOIN formula_tipos ft ON ft.formula_tipo_id = c.formula_tipo_id
 			 LEFT JOIN grupos_conceptos_master g ON g.grupo_id = c.grupo_id
 				 WHERE ec.empleado_id = ? AND c.empresa_id = ?
-				 ORDER BY COALESCE(ct.prioridad, 0) ASC, (CASE WHEN c.suma_resta = 'S' THEN 0 ELSE 1 END) ASC, c.codigo ASC, ec.fecha_asignacion DESC`,
+				 ORDER BY COALESCE(ct.prioridad, 0) ASC, (CASE WHEN c.suma_resta = 'S' THEN 0 ELSE 1 END) ASC, COALESCE(ft.orden, 9999) ASC, c.codigo ASC, ec.fecha_asignacion DESC`,
 			[empleadoId, empresaId]
 		);
 
@@ -341,17 +362,42 @@ router.get('/:id/conceptos', async (req, res) => {
 			fecha_asignacion: r.fecha_asignacion,
 			unidades: r.unidades !== null && r.unidades !== undefined ? Number(r.unidades) : null,
 			importe: r.importe !== null && r.importe !== undefined ? Number(r.importe) : null,
-				concepto: {
+			concepto: {
 				concepto_id: r.c_concepto_id,
 				descripcion: r.c_descripcion,
+				nombre: r.c_descripcion,
 				codigo: r.c_codigo,
 				detalle: r.c_detalle ?? null,
 				suma_resta: r.c_suma_resta ?? null,
+				formula_tipo_id: r.c_formula_tipo_id ?? null,
+				importe_fijo: r.c_importe_fijo !== null && r.c_importe_fijo !== undefined ? Number(r.c_importe_fijo) : null,
+				multiplicador: r.c_multiplicador !== null && r.c_multiplicador !== undefined ? Number(r.c_multiplicador) : null,
+				divisor: r.c_divisor !== null && r.c_divisor !== undefined ? Number(r.c_divisor) : null,
+				es_sueldo_basico: r.c_es_sueldo_basico !== null && r.c_es_sueldo_basico !== undefined ? Number(r.c_es_sueldo_basico) : null,
 				tipo_concepto: r.tipo_concepto_id
 					? { tipo_concepto_id: r.ct_conceptos_tipos_id ?? r.tipo_concepto_id, descripcion: r.tipo_descripcion ?? null, codigo: r.tipo_codigo ?? null, prioridad: r.ct_tipo_prioridad ?? 0 }
 					: null,
+				formula_tipo: r.c_formula_tipo_id
+					? {
+						formula_tipo_id: r.ft_formula_tipo_id ?? r.c_formula_tipo_id,
+						codigo: r.ft_codigo ?? null,
+						nombre: r.ft_nombre ?? null,
+						descripcion: r.ft_descripcion ?? null,
+						orden: r.ft_orden !== null && r.ft_orden !== undefined ? Number(r.ft_orden) : null,
+						activo: r.ft_activo !== null && r.ft_activo !== undefined ? Number(r.ft_activo) : null,
+					}
+					: null,
 				grupo: r.grupo_id
-					? { grupo_id: r.grupo_id, nombre: r.nombre ?? null, descripcion: r.descripcion ?? null }
+					? {
+						grupo_id: r.g_grupo_id ?? r.grupo_id,
+						codigo: r.g_codigo ?? null,
+						nombre: r.g_nombre ?? null,
+						descripcion: r.g_descripcion ?? null,
+						comentario: r.g_comentario ?? null,
+						orden: r.g_orden !== null && r.g_orden !== undefined ? Number(r.g_orden) : null,
+						permite_importe_fijo: r.g_permite_importe_fijo !== null && r.g_permite_importe_fijo !== undefined ? Number(r.g_permite_importe_fijo) : null,
+						es_default_sistema: r.g_es_default_sistema !== null && r.g_es_default_sistema !== undefined ? Number(r.g_es_default_sistema) : null,
+					}
 					: null,
 			},
 		}));
@@ -369,16 +415,22 @@ router.post('/:id/conceptos', async (req, res) => {
 		const empresaId = req.user.empresa_id;
 		const usuarioId = req.user.usuario_id;
 		const { id } = req.params;
-		const { concepto_ids, usuario_origen, importes, razon_override } = req.body;
+		const { concepto_ids, conceptos, usuario_origen, importes, razon_override } = req.body;
 		const importesMap = importes || {};
+		const conceptosInput = Array.isArray(conceptos) ? conceptos : [];
+		const conceptoIdsInput = Array.isArray(concepto_ids) ? concepto_ids : [];
 
 		const empleadoId = parseInt(id, 10);
 		if (!Number.isInteger(empleadoId) || empleadoId <= 0) return res.status(400).json({ error: 'empleado_id inválido' });
-		if (!Array.isArray(concepto_ids) || concepto_ids.length === 0) return res.status(400).json({ error: 'concepto_ids obligatorio' });
+		if (!conceptosInput.length && !conceptoIdsInput.length) return res.status(400).json({ error: 'concepto_ids o conceptos obligatorio' });
 
 		// validar conceptos: que existan y estén activos
-		const ids = concepto_ids.map((v) => parseInt(v, 10)).filter((v) => Number.isInteger(v) && v > 0);
-		if (ids.length !== concepto_ids.length) return res.status(400).json({ error: 'concepto_ids inválidos', invalid_ids: concepto_ids.filter((v) => !Number.isInteger(parseInt(v, 10)) || parseInt(v, 10) <= 0) });
+		const ids = [
+			...conceptoIdsInput.map((v) => parseInt(v, 10)),
+			...conceptosInput.map((item) => parseInt(item?.concepto_id, 10))
+		].filter((v) => Number.isInteger(v) && v > 0);
+		const uniqueIds = [...new Set(ids)];
+		if (uniqueIds.length === 0) return res.status(400).json({ error: 'concepto_ids inválidos' });
 
 		await conn.beginTransaction();
 
@@ -388,14 +440,20 @@ router.post('/:id/conceptos', async (req, res) => {
 			return res.status(404).json({ error: 'Empleado no encontrado' });
 		}
 
+		const [assignedRows] = await conn.query(
+			'SELECT DISTINCT concepto_id FROM empleados_conceptos WHERE empleado_id = ? AND empresa_id = ?',
+			[empleadoId, empresaId]
+		);
+		const assignedIds = assignedRows.map((row) => Number(row.concepto_id)).filter((value) => Number.isInteger(value) && value > 0);
+
 		// validar que los conceptos existan y pertenezcan a la misma empresa
-		const placeholders = ids.map(() => '?').join(',');
+		const placeholders = uniqueIds.map(() => '?').join(',');
 		const [validRows] = await conn.query(
 			`SELECT concepto_id FROM conceptos WHERE concepto_id IN (${placeholders}) AND empresa_id = ?`,
-			[...ids, empresaId]
+			[...uniqueIds, empresaId]
 		);
 		const validIds = validRows.map((r) => r.concepto_id);
-		const invalid = ids.filter((v) => !validIds.includes(v));
+		const invalid = uniqueIds.filter((v) => !validIds.includes(v) && !assignedIds.includes(v));
 		if (invalid.length) {
 			await conn.rollback();
 			return res.status(400).json({ error: 'concepto_id inválido', invalid_ids: invalid });
@@ -403,18 +461,60 @@ router.post('/:id/conceptos', async (req, res) => {
 
 		const created = [];
 		const skipped = [];
+		const updated = [];
+		const conceptPayloadById = new Map();
+		const conceptPayloadByEmpleadoConceptoId = new Map();
+		for (const item of conceptosInput) {
+			const conceptoId = parseInt(item?.concepto_id, 10);
+			const empleadoConceptoId = parseInt(item?.empleado_concepto_id, 10);
+			const targetEmpleadoConceptoId = Number.isInteger(empleadoConceptoId) && empleadoConceptoId > 0
+				? empleadoConceptoId
+				: (Number.isInteger(conceptoId) && conceptoId > 0 && assignedIds.includes(conceptoId) ? conceptoId : null);
+			if (Number.isInteger(conceptoId) && conceptoId > 0) {
+				conceptPayloadById.set(conceptoId, item);
+			}
+			if (Number.isInteger(targetEmpleadoConceptoId) && targetEmpleadoConceptoId > 0) {
+				conceptPayloadByEmpleadoConceptoId.set(targetEmpleadoConceptoId, item);
+			}
+		}
+
+		for (const [empleadoConceptoId, conceptoPayload] of conceptPayloadByEmpleadoConceptoId.entries()) {
+			const parsedUnidades = conceptoPayload.unidades !== undefined && conceptoPayload.unidades !== '' ? Number(conceptoPayload.unidades) : null;
+			const parsedImporte = conceptoPayload.importe !== undefined && conceptoPayload.importe !== '' ? Number(conceptoPayload.importe) : (conceptoPayload.importe_fijo !== undefined && conceptoPayload.importe_fijo !== '' ? Number(conceptoPayload.importe_fijo) : null);
+			const conceptoId = parseInt(conceptoPayload?.concepto_id, 10);
+			await conn.query(
+				'UPDATE empleados_conceptos SET unidades = ?, importe = ?, fecha_asignacion = NOW() WHERE empleado_concepto_id = ? AND empresa_id = ? AND empleado_id = ?',
+				[Number.isNaN(parsedUnidades) ? null : parsedUnidades, Number.isNaN(parsedImporte) ? null : parsedImporte, empleadoConceptoId, empresaId, empleadoId]
+			);
+			updated.push({ empleado_concepto_id: empleadoConceptoId, concepto_id: Number.isInteger(conceptoId) && conceptoId > 0 ? conceptoId : null });
+		}
 
 		for (const conceptoId of validIds) {
-			// upsert-like behavior: insertar solo si no existe (filtrar por empresa)
+			const conceptoPayload = conceptPayloadById.get(conceptoId) || {};
+			if (conceptoPayload?.empleado_concepto_id || assignedIds.includes(conceptoId)) {
+				continue;
+			}
+			const unidadesPayload = conceptoPayload.unidades !== undefined ? conceptoPayload.unidades : (importesMap?.[conceptoId] !== undefined ? importesMap[conceptoId] : null);
+			const importePayload = conceptoPayload.importe !== undefined ? conceptoPayload.importe : (importesMap?.[conceptoId] !== undefined ? importesMap[conceptoId] : null);
+
+			// upsert-like behavior: actualizar si ya existe, insertar si no existe
 			const [existRows] = await conn.query('SELECT empleado_concepto_id FROM empleados_conceptos WHERE empleado_id = ? AND concepto_id = ? AND empresa_id = ? LIMIT 1', [empleadoId, conceptoId, empresaId]);
 			if (existRows.length) {
-				skipped.push(conceptoId);
+				const empleadoConceptoId = existRows[0].empleado_concepto_id;
+				const parsedUnidades = unidadesPayload !== null && unidadesPayload !== undefined && unidadesPayload !== '' ? Number(unidadesPayload) : null;
+				const parsedImporte = importePayload !== null && importePayload !== undefined && importePayload !== '' ? Number(importePayload) : null;
+				await conn.query(
+					'UPDATE empleados_conceptos SET unidades = ?, importe = ?, fecha_asignacion = NOW() WHERE empleado_concepto_id = ? AND empresa_id = ?',
+					[Number.isNaN(parsedUnidades) ? null : parsedUnidades, Number.isNaN(parsedImporte) ? null : parsedImporte, empleadoConceptoId, empresaId]
+				);
+				updated.push({ concepto_id: conceptoId, empleado_concepto_id: empleadoConceptoId });
 				continue;
 			}
 
 
 			// calcular importe a insertar en empleados_conceptos si es sueldo básico
 			let importeAInsertar = null;
+			const unidadesAInsertar = unidadesPayload !== null && unidadesPayload !== undefined && unidadesPayload !== '' ? Number(unidadesPayload) : null;
 			let overrideUsed = false;
 			try {
 				const [conceptRows] = await conn.query('SELECT es_sueldo_basico, grupo_id, tipo_concepto_id, importe_fijo FROM conceptos WHERE concepto_id = ? AND empresa_id = ? LIMIT 1', [conceptoId, empresaId]);
@@ -482,9 +582,9 @@ router.post('/:id/conceptos', async (req, res) => {
 
 			const importeParam = (importeAInsertar === null || Number(importeAInsertar) === 0) ? null : importeAInsertar;
 			const [insResult] = await conn.query(
-				`INSERT INTO empleados_conceptos (empresa_id, empleado_id, concepto_id, fecha_asignacion, operador_codigo, nro_liquidacion, importe)
-				 VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
-				[empresaId, empleadoId, conceptoId, usuarioId, null, importeParam]
+				`INSERT INTO empleados_conceptos (empresa_id, empleado_id, concepto_id, fecha_asignacion, operador_codigo, nro_liquidacion, unidades, importe)
+				 VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)`,
+				[empresaId, empleadoId, conceptoId, usuarioId, null, Number.isNaN(unidadesAInsertar) ? null : unidadesAInsertar, importeParam]
 			);
 			created.push({ concepto_id: conceptoId, empleado_concepto_id: insResult.insertId });
 
@@ -505,11 +605,25 @@ router.post('/:id/conceptos', async (req, res) => {
 			}
 		}
 
+		for (const conceptoId of assignedIds.filter((conceptoId) => uniqueIds.includes(conceptoId) && !validIds.includes(conceptoId))) {
+			const conceptoPayload = conceptPayloadById.get(conceptoId) || {};
+			const parsedUnidades = conceptoPayload.unidades !== undefined && conceptoPayload.unidades !== '' ? Number(conceptoPayload.unidades) : null;
+			const parsedImporte = conceptoPayload.importe !== undefined && conceptoPayload.importe !== '' ? Number(conceptoPayload.importe) : null;
+			const [existRows] = await conn.query('SELECT empleado_concepto_id FROM empleados_conceptos WHERE empleado_id = ? AND concepto_id = ? AND empresa_id = ? LIMIT 1', [empleadoId, conceptoId, empresaId]);
+			if (existRows.length) {
+				await conn.query(
+					'UPDATE empleados_conceptos SET unidades = ?, importe = ?, fecha_asignacion = NOW() WHERE empleado_concepto_id = ? AND empresa_id = ?',
+					[Number.isNaN(parsedUnidades) ? null : parsedUnidades, Number.isNaN(parsedImporte) ? null : parsedImporte, existRows[0].empleado_concepto_id, empresaId]
+				);
+				updated.push({ concepto_id: conceptoId, empleado_concepto_id: existRows[0].empleado_concepto_id });
+			}
+		}
+
 		await conn.commit();
 
 		console.info('asignar conceptos', { usuario: usuarioId, empleadoId, created, skipped, usuario_origen });
 
-		return res.status(201).json({ success: true, created, skipped_already_assigned: skipped, meta: { empleado_id: empleadoId, count_created: created.length } });
+		return res.status(201).json({ success: true, created, updated, skipped_already_assigned: skipped, meta: { empleado_id: empleadoId, count_created: created.length, count_updated: updated.length } });
 	} catch (error) {
 		await conn.rollback();
 		console.error('empleado conceptos assign error:', error);

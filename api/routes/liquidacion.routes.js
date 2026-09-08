@@ -6,6 +6,7 @@ const service = createLiquidacionService();
 
 const router = Router();
 router.use(authenticateToken);
+router.get('/analitica', service.analitica);
 router.get('/', service.list);
 router.get('/:liquidacion_id', service.getById);
 router.delete('/:liquidacion_id', service.remove);

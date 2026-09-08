@@ -72,6 +72,29 @@ function formatPeriodoDisplay(value) {
     .replace(' de ', ' / ');
 }
 
+function calcularMediana(valores) {
+  if (!Array.isArray(valores) || !valores.length) return null;
+  const sorted = [...valores].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return Number(((sorted[middle - 1] + sorted[middle]) / 2).toFixed(2));
+  }
+  return Number(sorted[middle].toFixed(2));
+}
+
+function buildPeriodoFilters(params, periodoDesde, periodoHasta) {
+  const filters = [];
+  if (periodoDesde) {
+    filters.push('l.periodo >= ?');
+    params.push(periodoDesde);
+  }
+  if (periodoHasta) {
+    filters.push('l.periodo <= ?');
+    params.push(periodoHasta);
+  }
+  return filters;
+}
+
 async function ensurePeriodoLiquidacion(connection, empresaId, periodoParsed, fechaLiquidacion) {
   const [periodoRows] = await connection.query(
     'SELECT periodo_id, fecha_desde, fecha_hasta FROM periodos_liquidacion WHERE empresa_id = ? AND anio = ? AND mes = ? LIMIT 1',
@@ -178,6 +201,104 @@ async function getEstadoLiquidacionByNombre(connection, nombre) {
 
 export function createLiquidacionService() {
   return {
+    async analitica(req, res) {
+      try {
+        const empresaId = req.user.empresa_id;
+        const { periodo_desde, periodo_hasta, liquidacion_tipo_id } = req.query;
+        const params = [empresaId];
+        const filters = ['l.empresa_id = ?'];
+
+        filters.push(...buildPeriodoFilters(params, periodo_desde || null, periodo_hasta || null));
+        if (liquidacion_tipo_id !== undefined && liquidacion_tipo_id !== null && liquidacion_tipo_id !== '') {
+          filters.push('l.liquidacion_tipo_id = ?');
+          params.push(liquidacion_tipo_id);
+        }
+
+        const [rows] = await pool.query(
+          `SELECT l.liquidacion_id, l.empleado_id, l.total_haberes AS sueldo_bruto, l.total_neto, l.periodo,
+                  e.nombre, e.apellido, e.sexo, e.fecha_nacimiento,
+                  s.nombre AS seccion_nombre
+           FROM liquidaciones l
+           INNER JOIN empleados e ON e.empleado_id = l.empleado_id
+           LEFT JOIN secciones s ON s.seccion_id = e.seccion_id
+           WHERE ${filters.join(' AND ')}
+           ORDER BY l.total_haberes DESC, l.liquidacion_id DESC`,
+          params
+        );
+
+        if (!rows.length) {
+          return res.json({
+            top_salarios: [],
+            promedio: null,
+            mediana: null,
+            maximo: null,
+            minimo: null,
+            diferencia: null,
+            por_sector: [],
+          });
+        }
+
+        const salarios = rows
+          .map((row) => Number(row.sueldo_bruto))
+          .filter((value) => Number.isFinite(value));
+        const masaSalarial = salarios.reduce((acc, value) => acc + value, 0);
+        const promedio = salarios.length ? Number((masaSalarial / salarios.length).toFixed(2)) : null;
+        const mediana = calcularMediana(salarios);
+        const maximo = salarios.length ? Number(Math.max(...salarios).toFixed(2)) : null;
+        const minimo = salarios.length ? Number(Math.min(...salarios).toFixed(2)) : null;
+        const diferencia = maximo !== null && minimo !== null ? Number((maximo - minimo).toFixed(2)) : null;
+
+        const topSalarios = rows.slice(0, 5).map((row) => {
+          const sueldo = Number(row.sueldo_bruto) || 0;
+          return {
+            empleado: `${row.apellido ?? ''}, ${row.nombre ?? ''}`.replace(/^,\s*/, '').trim(),
+            sueldo: Number(sueldo.toFixed(2)),
+            porcentaje: masaSalarial > 0 ? Number(((sueldo * 100) / masaSalarial).toFixed(2)) : 0,
+          };
+        });
+
+        const sectorMap = new Map();
+        for (const row of rows) {
+          const sector = row.seccion_nombre || 'Sin sector';
+          const key = sector;
+          if (!sectorMap.has(key)) {
+            sectorMap.set(key, { sector, salarios: [], total: 0 });
+          }
+          const bucket = sectorMap.get(key);
+          const sueldo = Number(row.sueldo_bruto) || 0;
+          bucket.salarios.push(sueldo);
+          bucket.total += sueldo;
+        }
+
+        const porSector = Array.from(sectorMap.values())
+          .map((bucket) => {
+            const totalSector = bucket.total;
+            const promedioSector = bucket.salarios.length
+              ? Number((bucket.salarios.reduce((acc, value) => acc + value, 0) / bucket.salarios.length).toFixed(2))
+              : null;
+            return {
+              sector: bucket.sector,
+              promedio: promedioSector,
+              porcentaje_total: masaSalarial > 0 ? Number(((totalSector * 100) / masaSalarial).toFixed(2)) : 0,
+            };
+          })
+          .sort((a, b) => b.porcentaje_total - a.porcentaje_total || a.sector.localeCompare(b.sector, 'es'));
+
+        return res.json({
+          top_salarios: topSalarios,
+          promedio,
+          mediana,
+          maximo,
+          minimo,
+          diferencia,
+          por_sector: porSector,
+        });
+      } catch (error) {
+        console.error('liquidacion analitica error:', error);
+        return sendError(res, 500, 'Error al analizar liquidaciones', error.message);
+      }
+    },
+
     async list(req, res) {
       try {
         const empresaId = req.user.empresa_id;

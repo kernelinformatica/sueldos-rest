@@ -301,12 +301,14 @@ export function createEmployeeService() {
           // Consultar conceptos asignados por empleado (filtrados por empresa_id)
           try {
             const [conceptRows] = await pool.query(
-                    `SELECT ec.empleado_concepto_id, ec.empleado_id, ec.concepto_id, ec.unidades, ec.importe, ec.fecha_asignacion,
-                      c.descripcion AS concepto_descripcion, c.codigo AS concepto_codigo, c.es_sueldo_basico, c.tipo_concepto_id AS concepto_tipo_id, c.suma_resta AS concepto_suma_resta,
-                      ct.conceptos_tipos_id AS tipo_id_ref, ct.nombre AS tipo_nombre, ct.codigo AS tipo_codigo, ct.prioridad AS tipo_prioridad
+                      `SELECT ec.empleado_concepto_id, ec.empleado_id, ec.concepto_id, ec.unidades, ec.importe, ec.fecha_asignacion,
+                        c.descripcion AS concepto_descripcion, c.codigo AS concepto_codigo, c.es_sueldo_basico, c.tipo_concepto_id AS concepto_tipo_id, c.formula_tipo_id AS concepto_formula_tipo_id, c.suma_resta AS concepto_suma_resta,
+                        ct.conceptos_tipos_id AS tipo_id_ref, ct.nombre AS tipo_nombre, ct.codigo AS tipo_codigo, ct.prioridad AS tipo_prioridad,
+                        ft.formula_tipo_id AS formula_tipo_id_ref, ft.codigo AS formula_tipo_codigo, ft.nombre AS formula_tipo_nombre, ft.descripcion AS formula_tipo_descripcion, ft.orden AS formula_tipo_orden, ft.activo AS formula_tipo_activo
                      FROM empleados_conceptos ec
                      LEFT JOIN conceptos c ON c.concepto_id = ec.concepto_id
                      LEFT JOIN conceptos_tipos ct ON ct.conceptos_tipos_id = c.tipo_concepto_id
+                       LEFT JOIN formula_tipos ft ON ft.formula_tipo_id = c.formula_tipo_id
                      WHERE ec.empresa_id = ? AND ec.empleado_id IN (?)
                      ORDER BY COALESCE(ct.prioridad, 0) ASC, (CASE WHEN c.suma_resta = 'S' THEN 0 ELSE 1 END) ASC, c.codigo ASC, ec.fecha_asignacion DESC`,
               [empresaId, employeeIds]
@@ -326,7 +328,18 @@ export function createEmployeeService() {
                   codigo: cr.concepto_codigo ?? null,
                   es_sueldo_basico: Number(cr.es_sueldo_basico) === 1,
                   suma_resta: cr.concepto_suma_resta ?? null,
-                  tipo_concepto: cr.tipo_id_ref ? { tipo_concepto_id: cr.tipo_id_ref, nombre: cr.tipo_nombre ?? null, codigo: cr.tipo_codigo ?? null, prioridad: Number(cr.tipo_prioridad) || 0 } : null
+                  formula_tipo_id: cr.concepto_formula_tipo_id ?? null,
+                  tipo_concepto: cr.tipo_id_ref ? { tipo_concepto_id: cr.tipo_id_ref, nombre: cr.tipo_nombre ?? null, codigo: cr.tipo_codigo ?? null, prioridad: Number(cr.tipo_prioridad) || 0 } : null,
+                  formula_tipo: cr.concepto_formula_tipo_id
+                    ? {
+                        formula_tipo_id: cr.formula_tipo_id_ref ?? cr.concepto_formula_tipo_id,
+                        codigo: cr.formula_tipo_codigo ?? null,
+                        nombre: cr.formula_tipo_nombre ?? null,
+                        descripcion: cr.formula_tipo_descripcion ?? null,
+                        orden: cr.formula_tipo_orden !== null && cr.formula_tipo_orden !== undefined ? Number(cr.formula_tipo_orden) : null,
+                        activo: cr.formula_tipo_activo !== null && cr.formula_tipo_activo !== undefined ? Number(cr.formula_tipo_activo) : null
+                      }
+                    : null
                 }
               });
             }
@@ -446,11 +459,13 @@ export function createEmployeeService() {
         try {
           const [conceptRows] = await pool.query(
             `SELECT ec.empleado_concepto_id, ec.empleado_id, ec.concepto_id, ec.unidades, ec.importe, ec.fecha_asignacion,
-                    c.descripcion AS concepto_descripcion, c.codigo AS concepto_codigo, c.es_sueldo_basico, c.tipo_concepto_id AS concepto_tipo_id, c.suma_resta AS concepto_suma_resta,
-                    ct.conceptos_tipos_id AS tipo_id_ref, ct.nombre AS tipo_nombre, ct.codigo AS tipo_codigo, ct.prioridad AS tipo_prioridad
+                    c.descripcion AS concepto_descripcion, c.codigo AS concepto_codigo, c.es_sueldo_basico, c.tipo_concepto_id AS concepto_tipo_id, c.formula_tipo_id AS concepto_formula_tipo_id, c.suma_resta AS concepto_suma_resta,
+                    ct.conceptos_tipos_id AS tipo_id_ref, ct.nombre AS tipo_nombre, ct.codigo AS tipo_codigo, ct.prioridad AS tipo_prioridad,
+                    ft.formula_tipo_id AS formula_tipo_id_ref, ft.codigo AS formula_tipo_codigo, ft.nombre AS formula_tipo_nombre, ft.descripcion AS formula_tipo_descripcion, ft.orden AS formula_tipo_orden, ft.activo AS formula_tipo_activo
              FROM empleados_conceptos ec
              LEFT JOIN conceptos c ON c.concepto_id = ec.concepto_id
              LEFT JOIN conceptos_tipos ct ON ct.conceptos_tipos_id = c.tipo_concepto_id
+             LEFT JOIN formula_tipos ft ON ft.formula_tipo_id = c.formula_tipo_id
              WHERE ec.empresa_id = ? AND ec.empleado_id = ?
              ORDER BY ec.fecha_asignacion DESC`,
             [empresaId, req.params.id]
@@ -466,7 +481,18 @@ export function createEmployeeService() {
               codigo: cr.concepto_codigo ?? null,
               es_sueldo_basico: Number(cr.es_sueldo_basico) === 1,
               suma_resta: cr.concepto_suma_resta ?? null,
-              tipo_concepto: cr.tipo_id_ref ? { tipo_concepto_id: cr.tipo_id_ref, nombre: cr.tipo_nombre ?? null, codigo: cr.tipo_codigo ?? null, prioridad: Number(cr.tipo_prioridad) || 0 } : null
+              formula_tipo_id: cr.concepto_formula_tipo_id ?? null,
+              tipo_concepto: cr.tipo_id_ref ? { tipo_concepto_id: cr.tipo_id_ref, nombre: cr.tipo_nombre ?? null, codigo: cr.tipo_codigo ?? null, prioridad: Number(cr.tipo_prioridad) || 0 } : null,
+              formula_tipo: cr.concepto_formula_tipo_id
+                ? {
+                    formula_tipo_id: cr.formula_tipo_id_ref ?? cr.concepto_formula_tipo_id,
+                    codigo: cr.formula_tipo_codigo ?? null,
+                    nombre: cr.formula_tipo_nombre ?? null,
+                    descripcion: cr.formula_tipo_descripcion ?? null,
+                    orden: cr.formula_tipo_orden !== null && cr.formula_tipo_orden !== undefined ? Number(cr.formula_tipo_orden) : null,
+                    activo: cr.formula_tipo_activo !== null && cr.formula_tipo_activo !== undefined ? Number(cr.formula_tipo_activo) : null
+                  }
+                : null
             }
           }));
           // sort conceptosAssigned by tipo_concepto.prioridad ASC, suma_resta 'S' first, codigo ASC

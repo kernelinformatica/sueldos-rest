@@ -8,6 +8,15 @@ export function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function getBasePreferenteGrupo(concepto, contexto, fallback) {
+  const tieneGrupo = concepto.grupo_id !== null && concepto.grupo_id !== undefined && concepto.grupo_id !== '';
+  const baseGrupo = toNumber(contexto.sumaGrupo, 0);
+  if (tieneGrupo) {
+    return baseGrupo;
+  }
+  return toNumber(fallback, 0);
+}
+
 export function calcularFormulaManual(concepto, contexto) {
   const unidades = toNumber(contexto.unidades ?? concepto.unidades, 1);
   const importeBase = toNumber(concepto.importe_fijo, 0);
@@ -28,13 +37,10 @@ export function calcularFormulaFijo(concepto, contexto) {
 }
 
 export function calcularFormulaPresentismo(concepto, contexto) {
-  const tieneGrupo = concepto.grupo_id !== null && concepto.grupo_id !== undefined && concepto.grupo_id !== '';
-  const baseGrupo = toNumber(contexto.sumaGrupo, 0);
-  const baseGeneral = toNumber(contexto.baseRemunerativa ?? contexto.basalario, 0);
-  const base = tieneGrupo && baseGrupo > 0
-    ? baseGrupo
-    : baseGeneral;
-  return Number((base * 0.01).toFixed(2));
+  const base = getBasePreferenteGrupo(concepto, contexto, contexto.baseRemunerativa ?? contexto.basalario);
+  const multiplicador = toNumber(concepto.multiplicador, 8.33);
+  const divisor = toNumber(concepto.divisor, 100) || 100;
+  return Number(((base * multiplicador) / divisor).toFixed(2));
 }
 
 export function calcularFormulaAntiguedad(concepto, contexto) {
@@ -46,27 +52,27 @@ export function calcularFormulaAntiguedad(concepto, contexto) {
   const base = baseGrupo > 0 ? baseGrupo : baseFallback;
   if (base <= 0) return 0;
 
-  const multiplicador = toNumber(concepto.multiplicador, 1);
+  const multiplicador = toNumber(concepto.multiplicador, 0);
   const divisor = toNumber(concepto.divisor, 100) || 100;
   return Number(((anios * base * multiplicador) / divisor).toFixed(2));
 }
 
 export function calcularFormulaPorcentajeCategoria(concepto, contexto) {
-  const base = toNumber(contexto.categoriaBasico, 0);
+  const base = getBasePreferenteGrupo(concepto, contexto, contexto.categoriaBasico);
   const multiplicador = toNumber(concepto.multiplicador, 0);
   const divisor = toNumber(concepto.divisor, 100) || 100;
   return Number(((base * multiplicador) / divisor).toFixed(2));
 }
 
 export function calcularFormulaPorcentajeRemunerativo(concepto, contexto) {
-  const base = toNumber(contexto.sumaGrupo ?? contexto.baseRemunerativa, 0);
+  const base = getBasePreferenteGrupo(concepto, contexto, contexto.sumaGrupo ?? contexto.baseRemunerativa);
   const multiplicador = toNumber(concepto.multiplicador, 0);
   const divisor = toNumber(concepto.divisor, 100) || 100;
   return Number(((base * multiplicador) / divisor).toFixed(2));
 }
 
 export function calcularFormulaPorcentajeGrupo(concepto, contexto) {
-  const base = toNumber(contexto.sumaGrupo, 0);
+  const base = getBasePreferenteGrupo(concepto, contexto, contexto.sumaGrupo);
   const multiplicador = toNumber(concepto.multiplicador, 0);
   const divisor = toNumber(concepto.divisor, 100) || 100;
   return Number(((base * multiplicador) / divisor).toFixed(2));
@@ -74,9 +80,9 @@ export function calcularFormulaPorcentajeGrupo(concepto, contexto) {
 
 export function calcularFormulaSumaGrupo(concepto, contexto) {
   const unidades = toNumber(contexto.unidades ?? concepto.unidades, 1);
-  const sumaGrupo = toNumber(contexto.sumaGrupo, 0);
-  const multiplicador = toNumber(concepto.multiplicador, 1);
-  const divisor = toNumber(concepto.divisor, 1) || 1;
+  const sumaGrupo = getBasePreferenteGrupo(concepto, contexto, contexto.sumaGrupo);
+  const multiplicador = toNumber(concepto.multiplicador, 0);
+  const divisor = toNumber(concepto.divisor, 100) || 100;
   return Number(((sumaGrupo * multiplicador) / divisor * unidades).toFixed(2));
 }
 
