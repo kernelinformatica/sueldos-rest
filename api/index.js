@@ -60,14 +60,33 @@ const app = express();
 const PORT = process.env.PORT || 3500;
 const DOMAIN = process.env.HOST ;
 console.log(`Host configurado : ${DOMAIN}:${PORT}`);
-// CORS seguro solo para el frontend
+// CORS seguro para el frontend
 const FRONTEND_ORIGIN = process.env.CORS_ORIGIN;
-app.use(cors({
-  origin: FRONTEND_ORIGIN,
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Permitir solicitudes sin origen (como Postman, apps o server-to-server)
+    if (!origin) return callback(null, true);
+    // Permitir el origen configurado y variantes de desarrollo locales
+    const allowed = [
+      FRONTEND_ORIGIN,
+      'http://localhost:4210',
+      'http://127.0.0.1:4210',
+      'http://localhost:4200',
+      'http://127.0.0.1:4200'
+    ].filter(Boolean);
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '50mb' }));
 
