@@ -143,6 +143,8 @@ router.get('/modulos', async (req, res) => {
       safeCount('SELECT COUNT(*) AS total FROM secciones s INNER JOIN sucursales su ON su.sucursal_id = s.sucursal_id WHERE su.empresa_id = ?', [empresaId]),
       safeCount('SELECT COUNT(*) AS total FROM sucursales WHERE empresa_id = ?', [empresaId]),
       safeCount('SELECT COUNT(*) AS total FROM conceptos WHERE empresa_id = ?', [empresaId]),
+      safeCount('SELECT COUNT(*) AS total FROM convenios WHERE empresa_id = ?', [empresaId]),
+    
     ]);
 
     const counts = results.map((result) => (result.status === 'fulfilled' ? result.value : 0));
@@ -154,6 +156,7 @@ router.get('/modulos', async (req, res) => {
       secciones: { label: 'CANTIDAD', count: counts[2] },
       sucursales: { label: 'CANTIDAD', count: counts[3] },
       conceptos: { label: 'CANTIDAD', count: counts[4] },
+       convenios: { label: 'CANTIDAD', count: counts[5] },
     };
 
     return res.json(response);

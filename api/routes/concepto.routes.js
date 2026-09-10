@@ -422,7 +422,7 @@ router.get('/:id/topes', async (req, res) => {
 // keep CRUD endpoints for individual operations
 router.get('/:id', controller.getById);
 
-// Custom create to enforce single `es_sueldo_basico` per company and set default sueldo_basico_key
+// Custom create to normalize `es_sueldo_basico` and set default sueldo_basico_key
 router.post('/', async (req, res) => {
   try {
     const empresaId = req.user.empresa_id;
@@ -430,12 +430,6 @@ router.post('/', async (req, res) => {
     // coerce es_sueldo_basico
     const esSueldo = payload.es_sueldo_basico !== undefined ? (Number(payload.es_sueldo_basico) === 1 ? 1 : 0) : 0;
     if (esSueldo === 1) {
-      // clear existing sueldo basico flags for company
-      try {
-        await pool.query('UPDATE conceptos SET es_sueldo_basico = 0 WHERE empresa_id = ?', [empresaId]);
-      } catch (e) {
-        console.error('warning clearing previous es_sueldo_basico:', e);
-      }
       payload.es_sueldo_basico = 1;
     }
     // ensure empresa_id present
@@ -461,7 +455,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Custom update to enforce single `es_sueldo_basico` per company when toggled on
+// Custom update to normalize `es_sueldo_basico` when toggled on
 router.put('/:id', async (req, res) => {
   try {
     const empresaId = req.user.empresa_id;
@@ -488,11 +482,6 @@ router.put('/:id', async (req, res) => {
       console.error('update permiso check error:', e.message || e);
     }
     if (esSueldo === 1) {
-      try {
-        await pool.query('UPDATE conceptos SET es_sueldo_basico = 0 WHERE empresa_id = ? AND concepto_id != ?', [empresaId, id]);
-      } catch (e) {
-        console.error('warning clearing previous es_sueldo_basico on update:', e);
-      }
       payload.es_sueldo_basico = 1;
     }
     req.body = payload;
